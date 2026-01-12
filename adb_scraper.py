@@ -1,11 +1,14 @@
 """
-ADB (Asian Development Bank) Projects Scraper
-Extracts project information from https://www.adb.org/projects
+ADB Consulting Opportunities (CSRN) Scraper
+Extracts consulting services recruitment notices from:
+https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE
 
-Multiple methods included:
-1. Direct API access (when available)
-2. Selenium browser automation
-3. CSV data download from ADB Data Library
+This scraper extracts:
+- Project ID, Title, Country, Sector
+- Consulting Type (Firm/Individual)
+- Deadline, Duration, Budget
+- Selection Method, Engagement Type
+- And more...
 """
 
 import json
@@ -16,20 +19,20 @@ import os
 from datetime import datetime
 from typing import Optional, List, Dict
 from dataclasses import dataclass, asdict, field
-from urllib.parse import urljoin, urlencode
 
-import requests
-
-# Optional imports
+# Selenium imports
 try:
-    import undetected_chromedriver as uc
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
-    from selenium.common.exceptions import TimeoutException, NoSuchElementException
+    from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
     SELENIUM_AVAILABLE = True
 except ImportError:
     SELENIUM_AVAILABLE = False
+    print("⚠ Selenium not installed. Run: pip install selenium webdriver-manager")
 
 try:
     from bs4 import BeautifulSoup
@@ -39,122 +42,76 @@ except ImportError:
 
 
 @dataclass
-class Project:
-    """Data class to store ADB project information"""
-    project_id: str = ""
+class ConsultingOpportunity:
+    """Data class for ADB Consulting Opportunities (CSRN)"""
+    csrn_id: str = ""
     title: str = ""
+    project_name: str = ""
+    project_number: str = ""
     country: str = ""
-    region: str = ""
     sector: str = ""
-    subsector: str = ""
+    consulting_type: str = ""  # Firm or Individual
+    engagement_type: str = ""
+    selection_method: str = ""
+    budget_range: str = ""
+    duration: str = ""
+    deadline: str = ""
+    published_date: str = ""
     status: str = ""
-    project_type: str = ""
-    modality: str = ""
-    approval_date: str = ""
-    signing_date: str = ""
-    closing_date: str = ""
-    effectivity_date: str = ""
-    financing_amount: str = ""
-    currency: str = ""
-    borrower: str = ""
     executing_agency: str = ""
-    implementing_agency: str = ""
-    cofinancing: str = ""
     description: str = ""
-    objectives: str = ""
-    project_url: str = ""
+    terms_of_reference_url: str = ""
+    detail_url: str = ""
     scraped_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
-class ADBDataLibrary:
+class ADBConsultingScraper:
     """
-    Access ADB project data through their Data Library
-    https://data.adb.org/
-    
-    This provides downloadable CSV/Excel files with project data
+    Scraper for ADB Consulting Opportunities (CSRN)
+    URL: https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE
     """
     
-    # Known dataset URLs from ADB Data Library
-    DATASETS = {
-        'sovereign_projects': 'https://data.adb.org/dataset/sovereign-projects-loans-grants-and-technical-assistance',
-        'nonsovereign_projects': 'https://data.adb.org/dataset/nonsovereign-operations',
-        'cofinancing': 'https://data.adb.org/dataset/adb-official-cofinancing',
-        'procurement': 'https://data.adb.org/dataset/contracts-goods-works-and-services',
-    }
-    
-    @staticmethod
-    def get_download_instructions():
-        """Print instructions for downloading ADB data manually"""
-        print("""
-╔════════════════════════════════════════════════════════════════╗
-║           ADB Data Library - Manual Download Instructions      ║
-╠════════════════════════════════════════════════════════════════╣
-║                                                                ║
-║  The ADB website has Cloudflare protection that blocks         ║
-║  automated access. You can download the data manually:         ║
-║                                                                ║
-║  1. SOVEREIGN PROJECTS (Loans, Grants, TA):                    ║
-║     https://data.adb.org/dataset/sovereign-projects-loans-     ║
-║     grants-and-technical-assistance                            ║
-║                                                                ║
-║  2. NONSOVEREIGN OPERATIONS:                                   ║
-║     https://data.adb.org/dataset/nonsovereign-operations       ║
-║                                                                ║
-║  3. COFINANCING DATA:                                          ║
-║     https://data.adb.org/dataset/adb-official-cofinancing      ║
-║                                                                ║
-║  4. PROCUREMENT CONTRACTS:                                     ║
-║     https://data.adb.org/dataset/contracts-goods-works-and-    ║
-║     services                                                   ║
-║                                                                ║
-║  Steps:                                                        ║
-║  1. Visit the URL in your browser                              ║
-║  2. Click "Download" or "Export" button                        ║
-║  3. Choose CSV or Excel format                                 ║
-║  4. Save to this directory                                     ║
-║  5. Run: scraper.load_from_csv('filename.csv')                 ║
-║                                                                ║
-╚════════════════════════════════════════════════════════════════╝
-        """)
-
-
-class ADBScraper:
-    """
-    Main scraper class for ADB Projects
-    Supports multiple methods of data extraction
-    """
-    
-    BASE_URL = "https://www.adb.org"
-    PROJECTS_URL = "https://www.adb.org/projects"
-    API_SEARCH_URL = "https://www.adb.org/projects/search"
+    BASE_URL = "https://selfservice.adb.org"
+    CSRN_URL = "https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE"
     
     def __init__(self, headless: bool = True, delay: float = 2.0):
+        """
+        Initialize the scraper
+        
+        Args:
+            headless: Run browser in headless mode (no GUI)
+            delay: Delay between page requests in seconds
+        """
         self.headless = headless
         self.delay = delay
         self.driver = None
-        self.projects: List[Project] = []
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        })
+        self.opportunities: List[ConsultingOpportunity] = []
     
     def _setup_driver(self):
-        """Setup undetected Chrome WebDriver"""
+        """Setup Chrome WebDriver with appropriate options"""
         if not SELENIUM_AVAILABLE:
-            raise ImportError("Selenium not installed. Run: pip install undetected-chromedriver selenium")
+            raise ImportError("Selenium not installed. Run: pip install selenium webdriver-manager")
         
-        options = uc.ChromeOptions()
+        options = Options()
+        
         if self.headless:
             options.add_argument('--headless=new')
+        
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920,1080')
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        self.driver = uc.Chrome(options=options, version_main=None)
-        print("Browser initialized")
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=options)
+        except:
+            self.driver = webdriver.Chrome(options=options)
+        
+        self.driver.implicitly_wait(10)
+        print("✓ Browser initialized")
     
     def _close_driver(self):
         """Close the WebDriver"""
@@ -165,377 +122,495 @@ class ADBScraper:
                 pass
             self.driver = None
     
-    def load_from_csv(self, filepath: str) -> List[Project]:
-        """
-        Load project data from a CSV file (downloaded from ADB Data Library)
+    def _wait_for_element(self, by, value, timeout=20):
+        """Wait for element to be present"""
+        try:
+            element = WebDriverWait(self.driver, timeout).until(
+                EC.presence_of_element_located((by, value))
+            )
+            return element
+        except TimeoutException:
+            return None
+    
+    def _parse_title_for_details(self, title: str) -> dict:
+        """Extract project details from title string"""
+        details = {}
         
-        Args:
-            filepath: Path to the CSV file
-            
-        Returns:
-            List of Project objects
-        """
-        if not os.path.exists(filepath):
-            print(f"File not found: {filepath}")
-            return []
+        # Extract project number from title (format: LOAN-XXXX, GRANT-XXXX, TA-XXXX)
+        proj_match = re.search(r'(LOAN|GRANT|TA|L|G)-?(\d+)', title, re.IGNORECASE)
+        if proj_match:
+            details['project_type'] = proj_match.group(1).upper()
+            details['project_number'] = proj_match.group(2)
         
-        projects = []
+        # Extract ADB project ID (format: XXXXX-XXX in parentheses)
+        adb_id_match = re.search(r'\((\d{5}-\d{3})\)', title)
+        if adb_id_match:
+            details['project_id'] = adb_id_match.group(1)
         
-        # Common field mappings from ADB CSV exports
-        field_mappings = {
-            'project_id': ['Project Number', 'Project No.', 'Project ID', 'project_number', 'project_no'],
-            'title': ['Project Name', 'Title', 'Project Title', 'project_name'],
-            'country': ['Country', 'Countries', 'DMC', 'country'],
-            'region': ['Region', 'Geographic Region', 'region'],
-            'sector': ['Sector', 'Primary Sector', 'sector'],
-            'subsector': ['Subsector', 'Sub-Sector', 'subsector'],
-            'status': ['Status', 'Project Status', 'status'],
-            'project_type': ['Type', 'Project Type', 'Modality', 'type'],
-            'modality': ['Modality', 'Financing Modality', 'modality'],
-            'approval_date': ['Approval Date', 'Date Approved', 'Board Approval', 'approval_date'],
-            'signing_date': ['Signing Date', 'Date Signed', 'signing_date'],
-            'closing_date': ['Closing Date', 'Expected Closing', 'closing_date'],
-            'financing_amount': ['Amount', 'Financing Amount', 'ADB Financing', 'Total Amount', 'amount'],
-            'currency': ['Currency', 'currency'],
-            'borrower': ['Borrower', 'borrower'],
-            'executing_agency': ['Executing Agency', 'EA', 'executing_agency'],
-            'description': ['Description', 'Project Description', 'description'],
+        # Extract country codes (3-letter codes like REG, CAM, PRC, VIE, etc.)
+        country_codes = {
+            'REG': 'Regional',
+            'CAM': 'Cambodia',
+            'PRC': 'China',
+            'VIE': 'Vietnam',
+            'IND': 'India',
+            'INO': 'Indonesia',
+            'PHI': 'Philippines',
+            'BAN': 'Bangladesh',
+            'PAK': 'Pakistan',
+            'SRI': 'Sri Lanka',
+            'NEP': 'Nepal',
+            'MYA': 'Myanmar',
+            'THA': 'Thailand',
+            'LAO': 'Lao PDR',
+            'MON': 'Mongolia',
+            'UZB': 'Uzbekistan',
+            'KAZ': 'Kazakhstan',
+            'KGZ': 'Kyrgyz Republic',
+            'TAJ': 'Tajikistan',
+            'TKM': 'Turkmenistan',
+            'AFG': 'Afghanistan',
+            'ARM': 'Armenia',
+            'AZE': 'Azerbaijan',
+            'GEO': 'Georgia',
+            'PNG': 'Papua New Guinea',
+            'FIJ': 'Fiji',
+            'SAM': 'Samoa',
+            'TON': 'Tonga',
+            'VAN': 'Vanuatu',
+            'SOL': 'Solomon Islands',
+            'TIM': 'Timor-Leste',
+            'MLD': 'Maldives',
+            'BHU': 'Bhutan',
         }
         
-        try:
-            with open(filepath, 'r', encoding='utf-8-sig') as f:
-                reader = csv.DictReader(f)
-                headers = reader.fieldnames
-                
-                # Create mapping from CSV headers to our fields
-                header_map = {}
-                for our_field, possible_names in field_mappings.items():
-                    for name in possible_names:
-                        if name in headers:
-                            header_map[name] = our_field
-                            break
-                
-                for row in reader:
-                    project = Project()
-                    for csv_field, our_field in header_map.items():
-                        value = row.get(csv_field, '').strip()
-                        if value:
-                            setattr(project, our_field, value)
-                    
-                    # Generate project URL if we have project_id
-                    if project.project_id:
-                        project.project_url = f"{self.PROJECTS_URL}/{project.project_id}"
-                    
-                    if project.project_id or project.title:
-                        projects.append(project)
-            
-            self.projects = projects
-            print(f"Loaded {len(projects)} projects from {filepath}")
-            
-        except Exception as e:
-            print(f"Error reading CSV: {e}")
+        country_match = re.search(r'\b([A-Z]{3}):', title)
+        if country_match:
+            code = country_match.group(1)
+            details['country'] = country_codes.get(code, code)
         
-        return projects
+        return details
     
-    def load_from_json(self, filepath: str) -> List[Project]:
+    def scrape_opportunities(self, max_pages: int = 10, fetch_details: bool = False) -> List[ConsultingOpportunity]:
         """
-        Load project data from a JSON file
-        """
-        if not os.path.exists(filepath):
-            print(f"File not found: {filepath}")
-            return []
+        Scrape consulting opportunities from ADB CSRN portal
         
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+        Args:
+            max_pages: Maximum pages to scrape
+            fetch_details: Whether to fetch detailed info for each opportunity
             
-            projects = []
-            for item in data:
-                project = Project(**{k: v for k, v in item.items() if hasattr(Project, k)})
-                projects.append(project)
-            
-            self.projects = projects
-            print(f"Loaded {len(projects)} projects from {filepath}")
-            return projects
-            
-        except Exception as e:
-            print(f"Error reading JSON: {e}")
-            return []
-    
-    def scrape_with_selenium(self, max_pages: int = 5, fetch_details: bool = True) -> List[Project]:
-        """
-        Scrape projects using Selenium (bypasses some protections)
+        Returns:
+            List of ConsultingOpportunity objects
         """
         if not SELENIUM_AVAILABLE:
-            print("Selenium not available. Install with: pip install undetected-chromedriver selenium")
+            print("❌ Selenium not available. Install with: pip install selenium webdriver-manager")
             return []
         
         try:
             self._setup_driver()
             
-            print(f"Navigating to {self.PROJECTS_URL}...")
-            self.driver.get(self.PROJECTS_URL)
+            print(f"\n🌐 Navigating to CSRN portal...")
+            print(f"   URL: {self.CSRN_URL}")
+            self.driver.get(self.CSRN_URL)
             
-            # Wait for Cloudflare
-            print("Waiting for page to load...")
-            time.sleep(10)
+            # Wait for page to load
+            print("⏳ Waiting for page to load...")
+            time.sleep(5)
             
-            # Check if we passed protection
-            page_source = self.driver.page_source
-            if "Just a moment" in page_source or "Verify you are human" in page_source:
-                print("❌ Cloudflare protection active - automated access blocked")
-                print("\nTry one of these alternatives:")
-                print("1. Download data manually from ADB Data Library")
-                print("2. Use a VPN or different network")
-                print("3. Run the script from your local machine (not cloud)")
-                ADBDataLibrary.get_download_instructions()
-                return []
+            # Wait for the results table
+            results_table = self._wait_for_element(By.ID, "atResults")
             
-            all_projects = []
+            if not results_table:
+                print("⚠ Could not find results table, trying alternative selectors...")
+                results_table = self._wait_for_element(By.CSS_SELECTOR, "table[id*='Results'], table.x1h")
             
-            for page in range(max_pages):
-                print(f"\nScraping page {page + 1}...")
+            all_opportunities = []
+            page_num = 1
+            
+            while page_num <= max_pages:
+                print(f"\n📄 Scraping page {page_num}...")
                 
-                # Find project links
-                links = self.driver.find_elements(By.CSS_SELECTOR, 'a[href*="/projects/"]')
+                # Parse current page
+                page_opportunities = self._parse_results_page()
                 
-                seen_urls = set()
-                for link in links:
-                    try:
-                        href = link.get_attribute('href')
-                        text = link.text.strip()
-                        
-                        if href and re.search(r'/projects/\d+', href) and href not in seen_urls and text:
-                            seen_urls.add(href)
-                            match = re.search(r'/projects/(\d+)', href)
-                            proj_id = match.group(1) if match else ""
-                            
-                            all_projects.append({
-                                'project_id': proj_id,
-                                'title': text,
-                                'project_url': href
-                            })
-                    except:
-                        continue
+                # Filter out navigation elements
+                valid_opportunities = [
+                    opp for opp in page_opportunities 
+                    if opp.get('title') and 
+                    not opp.get('title', '').startswith('Next') and
+                    not opp.get('title', '').startswith('Previous') and
+                    len(opp.get('title', '')) > 10
+                ]
                 
-                print(f"  Found {len(seen_urls)} projects on this page")
-                
-                # Try next page
-                try:
-                    next_btn = self.driver.find_element(By.CSS_SELECTOR, 'a[rel="next"], .pager__item--next a')
-                    self.driver.execute_script("arguments[0].click();", next_btn)
-                    time.sleep(3)
-                except:
-                    print("No more pages")
+                if not valid_opportunities:
+                    print("   No more valid opportunities found.")
                     break
+                
+                all_opportunities.extend(valid_opportunities)
+                print(f"   ✓ Found {len(valid_opportunities)} opportunities")
+                print(f"   📊 Total so far: {len(all_opportunities)}")
+                
+                # Try to go to next page
+                if not self._go_to_next_page():
+                    print("   ℹ No more pages available.")
+                    break
+                
+                page_num += 1
+                time.sleep(self.delay)
             
-            # Fetch details if requested
-            if fetch_details:
-                print("\nFetching project details...")
-                for i, proj_data in enumerate(all_projects):
-                    print(f"  [{i+1}/{len(all_projects)}] {proj_data.get('title', '')[:50]}...")
-                    project = self._get_project_details_selenium(proj_data['project_url'])
-                    if project:
-                        self.projects.append(project)
-                    time.sleep(self.delay)
-            else:
-                for proj_data in all_projects:
-                    project = Project(**{k: v for k, v in proj_data.items() if hasattr(Project, k)})
-                    self.projects.append(project)
+            # Convert to ConsultingOpportunity objects
+            self.opportunities = []
+            for opp_dict in all_opportunities:
+                # Parse additional details from title
+                title_details = self._parse_title_for_details(opp_dict.get('title', ''))
+                opp_dict.update({k: v for k, v in title_details.items() if not opp_dict.get(k)})
+                
+                opp = ConsultingOpportunity(
+                    csrn_id=opp_dict.get('csrn_id', ''),
+                    title=opp_dict.get('title', ''),
+                    project_name=opp_dict.get('project_name', ''),
+                    project_number=opp_dict.get('project_number', opp_dict.get('project_id', '')),
+                    country=opp_dict.get('country', ''),
+                    sector=opp_dict.get('sector', ''),
+                    consulting_type=opp_dict.get('consulting_type', ''),
+                    engagement_type=opp_dict.get('engagement_type', ''),
+                    selection_method=opp_dict.get('selection_method', ''),
+                    budget_range=opp_dict.get('budget_range', ''),
+                    duration=opp_dict.get('duration', ''),
+                    deadline=opp_dict.get('deadline', ''),
+                    published_date=opp_dict.get('published_date', ''),
+                    status=opp_dict.get('status', 'Open'),
+                    executing_agency=opp_dict.get('executing_agency', ''),
+                    description=opp_dict.get('description', ''),
+                    detail_url=opp_dict.get('detail_url', ''),
+                )
+                self.opportunities.append(opp)
             
-            return self.projects
+            # Fetch additional details if requested
+            if fetch_details and self.opportunities:
+                print(f"\n📋 Fetching detailed information...")
+                for i, opp in enumerate(self.opportunities[:20]):  # Limit to first 20 for speed
+                    if opp.detail_url and 'adb.org/projects' in opp.detail_url:
+                        print(f"   [{i+1}] Fetching details for: {opp.title[:50]}...")
+                        self._fetch_opportunity_details(opp)
+                        time.sleep(1)
+            
+            print(f"\n✅ Total opportunities scraped: {len(self.opportunities)}")
+            return self.opportunities
+            
+        except Exception as e:
+            print(f"\n❌ Error during scraping: {e}")
+            import traceback
+            traceback.print_exc()
+            return self.opportunities
             
         finally:
             self._close_driver()
     
-    def _get_project_details_selenium(self, url: str) -> Optional[Project]:
-        """Fetch project details using Selenium"""
+    def _parse_results_page(self) -> List[dict]:
+        """Parse the results table on current page"""
+        opportunities = []
+        
         try:
-            self.driver.get(url)
-            time.sleep(3)
+            # Method 1: Parse using Selenium
+            table = self.driver.find_element(By.ID, "atResults")
+            rows = table.find_elements(By.TAG_NAME, "tr")
             
-            project = Project(project_url=url)
-            
-            # Extract project ID
-            match = re.search(r'/projects/(\d+)', url)
-            if match:
-                project.project_id = match.group(1)
-            
-            # Extract title
-            try:
-                title = self.driver.find_element(By.CSS_SELECTOR, 'h1')
-                project.title = title.text.strip()
-            except:
-                pass
-            
-            # Extract from page text using patterns
-            try:
-                page_text = self.driver.find_element(By.TAG_NAME, 'body').text
-                
-                patterns = {
-                    'country': r'Country[:\s]*([A-Za-z\s,]+?)(?:\n|Sector|Region)',
-                    'sector': r'(?<!Sub)Sector[:\s]*([^\n]+)',
-                    'status': r'Status[:\s]*([^\n]+)',
-                    'approval_date': r'Approval[:\s]*(\d{1,2}\s+\w+\s+\d{4})',
-                    'financing_amount': r'(\$[\d,\.]+\s*(?:million|billion)?)',
-                }
-                
-                for field, pattern in patterns.items():
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                        setattr(project, field, match.group(1).strip())
-            except:
-                pass
-            
-            return project
+            for row in rows:
+                try:
+                    cells = row.find_elements(By.TAG_NAME, "td")
+                    if len(cells) < 2:
+                        continue
+                    
+                    opp = {}
+                    row_text = row.text
+                    
+                    # Skip pagination rows
+                    if 'Next' in row_text and len(row_text) < 20:
+                        continue
+                    if 'Previous' in row_text and len(row_text) < 20:
+                        continue
+                    
+                    # Find all links in the row
+                    links = row.find_elements(By.TAG_NAME, "a")
+                    for link in links:
+                        href = link.get_attribute('href') or ''
+                        text = link.text.strip()
+                        
+                        # Skip navigation links
+                        if text in ['Next', 'Previous', 'Next 25', 'Previous 25', '']:
+                            continue
+                        
+                        # Main title link
+                        if text and len(text) > 15:
+                            opp['title'] = text
+                            opp['detail_url'] = href
+                    
+                    # Extract consulting type from icon or text
+                    if 'Firm' in row_text or 'firm' in row.get_attribute('innerHTML').lower():
+                        opp['consulting_type'] = 'Firm'
+                    elif 'Individual' in row_text or 'individual' in row.get_attribute('innerHTML').lower():
+                        opp['consulting_type'] = 'Individual'
+                    
+                    # Try to extract deadline from cells
+                    for cell in cells:
+                        cell_text = cell.text.strip()
+                        # Check if it looks like a date
+                        if re.match(r'\d{1,2}[-/]\w{3}[-/]\d{4}', cell_text):
+                            opp['deadline'] = cell_text
+                        elif re.match(r'\d{4}[-/]\d{2}[-/]\d{2}', cell_text):
+                            opp['deadline'] = cell_text
+                    
+                    if opp.get('title'):
+                        opportunities.append(opp)
+                        
+                except StaleElementReferenceException:
+                    continue
+                except Exception:
+                    continue
             
         except Exception as e:
-            print(f"Error: {e}")
-            return None
-    
-    def create_sample_data(self, count: int = 10) -> List[Project]:
-        """
-        Create sample project data for testing purposes
-        """
-        sample_countries = ['Philippines', 'Indonesia', 'Vietnam', 'Bangladesh', 'India', 
-                          'Pakistan', 'Sri Lanka', 'Nepal', 'Cambodia', 'Myanmar']
-        sample_sectors = ['Transport', 'Energy', 'Water and Urban', 'Education', 'Health',
-                         'Agriculture', 'Finance', 'Public Sector', 'Industry', 'Multisector']
-        sample_statuses = ['Active', 'Proposed', 'Closed', 'Approved']
+            print(f"   ⚠ Error parsing table: {e}")
+            
+            # Method 2: Try BeautifulSoup parsing
+            if BS4_AVAILABLE:
+                try:
+                    soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                    table = soup.find(id='atResults')
+                    
+                    if table:
+                        for row in table.find_all('tr'):
+                            cells = row.find_all('td')
+                            if len(cells) < 2:
+                                continue
+                            
+                            opp = {}
+                            row_text = row.get_text()
+                            
+                            # Find links
+                            for link in row.find_all('a'):
+                                text = link.get_text(strip=True)
+                                href = link.get('href', '')
+                                
+                                if text and len(text) > 15 and text not in ['Next', 'Previous', 'Next 25']:
+                                    opp['title'] = text
+                                    opp['detail_url'] = href if href.startswith('http') else self.BASE_URL + href
+                            
+                            if 'Firm' in row_text:
+                                opp['consulting_type'] = 'Firm'
+                            elif 'Individual' in row_text:
+                                opp['consulting_type'] = 'Individual'
+                            
+                            if opp.get('title'):
+                                opportunities.append(opp)
+                except Exception:
+                    pass
         
-        projects = []
-        for i in range(count):
-            import random
-            project = Project(
-                project_id=str(50000 + i),
-                title=f"Sample Infrastructure Development Project {i+1}",
-                country=random.choice(sample_countries),
-                region="Southeast Asia" if i % 2 == 0 else "South Asia",
-                sector=random.choice(sample_sectors),
-                status=random.choice(sample_statuses),
-                approval_date=f"{random.randint(2015, 2024)}-{random.randint(1,12):02d}-{random.randint(1,28):02d}",
-                financing_amount=f"${random.randint(10, 500)} million",
-                project_url=f"https://www.adb.org/projects/{50000 + i}",
-                description=f"This is a sample project for testing the scraper functionality. "
-                           f"It includes various infrastructure improvements in {sample_countries[i % len(sample_countries)]}."
-            )
-            projects.append(project)
-        
-        self.projects = projects
-        print(f"Created {count} sample projects for testing")
-        return projects
+        return opportunities
     
-    def save_to_json(self, filename: str = "adb_projects.json"):
-        """Save projects to JSON file"""
-        if not self.projects:
-            print("No projects to save")
+    def _go_to_next_page(self) -> bool:
+        """Try to navigate to next page"""
+        try:
+            # Try various selectors for next button
+            next_selectors = [
+                "//a[contains(text(), 'Next')]",
+                "//img[@title='Next']/parent::a",
+                "//a[@title='Next']",
+                "//td[contains(@class, 'xh')]//a[contains(text(), 'Next')]",
+            ]
+            
+            for xpath in next_selectors:
+                try:
+                    next_btn = self.driver.find_element(By.XPATH, xpath)
+                    if next_btn.is_displayed():
+                        # Scroll to element
+                        self.driver.execute_script("arguments[0].scrollIntoView(true);", next_btn)
+                        time.sleep(0.5)
+                        next_btn.click()
+                        time.sleep(3)
+                        return True
+                except:
+                    continue
+            
+            # Try CSS selectors
+            css_selectors = [
+                "a[title*='Next']",
+                "a.xh[href*='Next']",
+                "img[alt='Next']",
+            ]
+            
+            for css in css_selectors:
+                try:
+                    next_btn = self.driver.find_element(By.CSS_SELECTOR, css)
+                    if next_btn.is_displayed():
+                        self.driver.execute_script("arguments[0].click();", next_btn)
+                        time.sleep(3)
+                        return True
+                except:
+                    continue
+            
+            return False
+            
+        except Exception:
+            return False
+    
+    def _fetch_opportunity_details(self, opportunity: ConsultingOpportunity):
+        """Fetch additional details for an opportunity"""
+        if not opportunity.detail_url:
             return
         
-        data = [asdict(p) for p in self.projects]
+        try:
+            self.driver.get(opportunity.detail_url)
+            time.sleep(2)
+            
+            page_text = self.driver.find_element(By.TAG_NAME, 'body').text
+            
+            # Extract additional fields
+            patterns = {
+                'sector': r'Sector[:\s]*([^\n]+)',
+                'country': r'Country[:\s]*([^\n]+)',
+                'executing_agency': r'Executing Agency[:\s]*([^\n]+)',
+                'description': r'Description[:\s]*([^\n]+)',
+            }
+            
+            for field, pattern in patterns.items():
+                if not getattr(opportunity, field):
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        setattr(opportunity, field, match.group(1).strip()[:500])
+            
+        except Exception:
+            pass
+    
+    def save_to_json(self, filename: str = "adb_consulting_opportunities.json"):
+        """Save opportunities to JSON file"""
+        if not self.opportunities:
+            print("❌ No opportunities to save")
+            return
+        
+        data = [asdict(opp) for opp in self.opportunities]
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"✓ Saved {len(data)} projects to {filename}")
+        print(f"✓ Saved {len(data)} opportunities to {filename}")
     
-    def save_to_csv(self, filename: str = "adb_projects.csv"):
-        """Save projects to CSV file"""
-        if not self.projects:
-            print("No projects to save")
+    def save_to_csv(self, filename: str = "adb_consulting_opportunities.csv"):
+        """Save opportunities to CSV file"""
+        if not self.opportunities:
+            print("❌ No opportunities to save")
             return
         
-        data = [asdict(p) for p in self.projects]
+        data = [asdict(opp) for opp in self.opportunities]
         fieldnames = list(data[0].keys())
         
         with open(filename, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
             writer.writerows(data)
-        print(f"✓ Saved {len(data)} projects to {filename}")
+        print(f"✓ Saved {len(data)} opportunities to {filename}")
+    
+    def load_from_json(self, filename: str) -> List[ConsultingOpportunity]:
+        """Load opportunities from JSON file"""
+        if not os.path.exists(filename):
+            print(f"❌ File not found: {filename}")
+            return []
+        
+        try:
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            self.opportunities = [
+                ConsultingOpportunity(**item) for item in data
+            ]
+            print(f"✓ Loaded {len(self.opportunities)} opportunities from {filename}")
+            return self.opportunities
+        except Exception as e:
+            print(f"❌ Error loading JSON: {e}")
+            return []
     
     def print_summary(self):
-        """Print summary of scraped projects"""
-        if not self.projects:
-            print("No projects loaded")
+        """Print summary of scraped opportunities"""
+        if not self.opportunities:
+            print("❌ No opportunities loaded")
             return
         
-        print("\n" + "=" * 60)
-        print(f"PROJECT SUMMARY: {len(self.projects)} projects")
-        print("=" * 60)
+        print("\n" + "=" * 70)
+        print(f"📊 CONSULTING OPPORTUNITIES SUMMARY: {len(self.opportunities)} total")
+        print("=" * 70)
         
-        # Count by country
+        # Count by type
+        types = {}
         countries = {}
-        sectors = {}
-        statuses = {}
         
-        for p in self.projects:
-            if p.country:
-                countries[p.country] = countries.get(p.country, 0) + 1
-            if p.sector:
-                sectors[p.sector] = sectors.get(p.sector, 0) + 1
-            if p.status:
-                statuses[p.status] = statuses.get(p.status, 0) + 1
+        for opp in self.opportunities:
+            if opp.consulting_type:
+                types[opp.consulting_type] = types.get(opp.consulting_type, 0) + 1
+            if opp.country:
+                countries[opp.country] = countries.get(opp.country, 0) + 1
+        
+        if types:
+            print("\n📌 By Consulting Type:")
+            for t, count in sorted(types.items(), key=lambda x: -x[1]):
+                print(f"   • {t}: {count}")
         
         if countries:
-            print("\nTop Countries:")
-            for country, count in sorted(countries.items(), key=lambda x: -x[1])[:10]:
-                print(f"  {country}: {count}")
+            print("\n🌍 By Country:")
+            for country, count in sorted(countries.items(), key=lambda x: -x[1])[:15]:
+                print(f"   • {country}: {count}")
         
-        if sectors:
-            print("\nTop Sectors:")
-            for sector, count in sorted(sectors.items(), key=lambda x: -x[1])[:10]:
-                print(f"  {sector}: {count}")
+        print("\n" + "-" * 70)
+        print("📋 Sample Opportunities:")
+        print("-" * 70)
         
-        if statuses:
-            print("\nBy Status:")
-            for status, count in sorted(statuses.items(), key=lambda x: -x[1]):
-                print(f"  {status}: {count}")
+        # Filter for valid opportunities
+        valid_opps = [o for o in self.opportunities if len(o.title) > 20]
         
-        # Sample projects
-        print("\n" + "-" * 60)
-        print("Sample Projects:")
-        print("-" * 60)
-        for i, p in enumerate(self.projects[:5]):
-            print(f"\n[{i+1}] {p.title}")
-            print(f"    ID: {p.project_id} | Country: {p.country}")
-            print(f"    Sector: {p.sector} | Status: {p.status}")
-            if p.financing_amount:
-                print(f"    Financing: {p.financing_amount}")
+        for i, opp in enumerate(valid_opps[:10]):
+            print(f"\n[{i+1}] {opp.title[:80]}...")
+            print(f"    Type: {opp.consulting_type or 'N/A'}")
+            print(f"    Country: {opp.country or 'N/A'}")
+            print(f"    Project #: {opp.project_number or 'N/A'}")
+            if opp.deadline:
+                print(f"    Deadline: {opp.deadline}")
+            if opp.detail_url:
+                print(f"    URL: {opp.detail_url[:60]}...")
 
 
 def main():
+    """Main function to run the scraper"""
     print("""
-╔════════════════════════════════════════════════════════════════╗
-║              ADB PROJECTS SCRAPER v2.0                         ║
-╠════════════════════════════════════════════════════════════════╣
-║  Extracts project data from Asian Development Bank             ║
-╚════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════╗
+║     ADB CONSULTING OPPORTUNITIES SCRAPER (CSRN)                      ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Source: https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=          ║
+║          XXCRS_CSRN_HOME_PAGE                                        ║
+║                                                                      ║
+║  Extracts: Title, Project Number, Country, Consulting Type,         ║
+║            Deadline, Budget, Selection Method, and more...          ║
+╚══════════════════════════════════════════════════════════════════════╝
     """)
     
-    scraper = ADBScraper(headless=True, delay=2.0)
+    # Initialize scraper
+    scraper = ADBConsultingScraper(headless=True, delay=2.0)
     
-    # Method 1: Try loading from existing CSV (if downloaded from ADB)
-    csv_files = [f for f in os.listdir('.') if f.endswith('.csv') and 'adb' in f.lower()]
-    if csv_files:
-        print(f"Found existing CSV files: {csv_files}")
-        scraper.load_from_csv(csv_files[0])
-    
-    # Method 2: Try Selenium scraping
-    if not scraper.projects and SELENIUM_AVAILABLE:
-        print("\nAttempting to scrape with Selenium...")
-        scraper.scrape_with_selenium(max_pages=3, fetch_details=False)
-    
-    # Method 3: Create sample data for testing
-    if not scraper.projects:
-        print("\n⚠ Could not access ADB website (Cloudflare protection)")
-        ADBDataLibrary.get_download_instructions()
+    try:
+        # Scrape opportunities
+        opportunities = scraper.scrape_opportunities(max_pages=10, fetch_details=False)
         
-        print("\nCreating sample data for testing...")
-        scraper.create_sample_data(20)
-    
-    # Save results
-    if scraper.projects:
-        scraper.save_to_json("adb_projects.json")
-        scraper.save_to_csv("adb_projects.csv")
-        scraper.print_summary()
+        if opportunities:
+            # Save results
+            scraper.save_to_json("adb_consulting_opportunities.json")
+            scraper.save_to_csv("adb_consulting_opportunities.csv")
+            
+            # Print summary
+            scraper.print_summary()
+        else:
+            print("\n⚠ No opportunities were scraped.")
+            print("   The page structure may have changed.")
+            
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

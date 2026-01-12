@@ -1,23 +1,26 @@
-# ADB Projects Scraper
+# ADB Consulting Opportunities Scraper (CSRN)
 
-A Python scraper to extract project information from the **Asian Development Bank (ADB)** website.
+A Python scraper to extract consulting services recruitment notices from the **Asian Development Bank (ADB)** Self-Service Portal.
+
+## Source URL
+
+```
+https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE
+```
 
 ## Features
 
-- Extracts comprehensive project data including:
-  - Project ID, Title, Country, Region
-  - Sector, Subsector, Status
-  - Approval/Signing/Closing dates
-  - Financing amount, Borrower
-  - Executing/Implementing agencies
-  - Project description and objectives
+- Extracts comprehensive consulting opportunity data:
+  - **Project Details**: ID, Title, Project Number
+  - **Location**: Country, Region
+  - **Type**: Firm or Individual consulting
+  - **Terms**: Deadline, Duration, Budget Range
+  - **Method**: Selection Method, Engagement Type
+  - **Links**: Detail URL, Terms of Reference
 
-- Multiple data access methods:
-  1. **Selenium scraping** (with Cloudflare bypass)
-  2. **CSV import** from ADB Data Library
-  3. **JSON import** from previous scrapes
-
-- Exports to both **JSON** and **CSV** formats
+- Automatic pagination handling
+- Export to **JSON** and **CSV** formats
+- Summary statistics and reporting
 
 ## Installation
 
@@ -25,9 +28,17 @@ A Python scraper to extract project information from the **Asian Development Ban
 pip install -r requirements.txt
 ```
 
+## Requirements
+
+- Python 3.7+
+- selenium
+- webdriver-manager
+- beautifulsoup4
+- Chrome browser installed
+
 ## Usage
 
-### Basic Usage
+### Command Line
 
 ```bash
 python3 adb_scraper.py
@@ -36,114 +47,120 @@ python3 adb_scraper.py
 ### In Python
 
 ```python
-from adb_scraper import ADBScraper
+from adb_scraper import ADBConsultingScraper
 
 # Initialize scraper
-scraper = ADBScraper(headless=True, delay=2.0)
+scraper = ADBConsultingScraper(headless=True, delay=2.0)
 
-# Method 1: Scrape with Selenium
-projects = scraper.scrape_with_selenium(max_pages=5, fetch_details=True)
-
-# Method 2: Load from downloaded CSV
-projects = scraper.load_from_csv('adb_sovereign_projects.csv')
-
-# Method 3: Load from JSON
-projects = scraper.load_from_json('adb_projects.json')
+# Scrape opportunities (max 10 pages)
+opportunities = scraper.scrape_opportunities(max_pages=10)
 
 # Save results
-scraper.save_to_json('adb_projects.json')
-scraper.save_to_csv('adb_projects.csv')
+scraper.save_to_json("opportunities.json")
+scraper.save_to_csv("opportunities.csv")
 
 # Print summary
 scraper.print_summary()
 ```
 
-### Scrape a Single Project
+### Load Existing Data
 
 ```python
-scraper = ADBScraper()
-project = scraper.scrape_project_by_id('56789')
-print(project)
+scraper = ADBConsultingScraper()
+scraper.load_from_json("adb_consulting_opportunities.json")
+scraper.print_summary()
 ```
-
-## Cloudflare Protection Note
-
-The ADB website uses Cloudflare protection that may block automated access from cloud servers. If you encounter this:
-
-### Option 1: Download Data Manually
-Visit these ADB Data Library URLs in your browser:
-
-1. **Sovereign Projects**: https://data.adb.org/dataset/sovereign-projects-loans-grants-and-technical-assistance
-2. **Nonsovereign Operations**: https://data.adb.org/dataset/nonsovereign-operations
-3. **Cofinancing**: https://data.adb.org/dataset/adb-official-cofinancing
-4. **Procurement**: https://data.adb.org/dataset/contracts-goods-works-and-services
-
-Then load the CSV:
-```python
-scraper.load_from_csv('downloaded_file.csv')
-```
-
-### Option 2: Run Locally
-The scraper works better from a local machine (not cloud servers).
-
-### Option 3: Use VPN
-Connect via VPN to a different IP address.
 
 ## Output Format
 
 ### JSON Structure
+
 ```json
 {
-  "project_id": "56789",
-  "title": "Infrastructure Development Project",
-  "country": "Philippines",
-  "region": "Southeast Asia",
-  "sector": "Transport",
-  "status": "Active",
-  "approval_date": "2023-06-15",
-  "financing_amount": "$250 million",
-  "project_url": "https://www.adb.org/projects/56789",
-  ...
+  "csrn_id": "12345",
+  "title": "TA-6645 REG: Project Name - Consulting Package",
+  "project_name": "Project Name",
+  "project_number": "54087-001",
+  "country": "Regional",
+  "sector": "Finance",
+  "consulting_type": "Firm",
+  "engagement_type": "Full-time",
+  "selection_method": "QCBS",
+  "budget_range": "$100,000 - $500,000",
+  "duration": "12 months",
+  "deadline": "15-Jan-2026",
+  "status": "Open",
+  "detail_url": "https://www.adb.org/projects/54087-001/main",
+  "scraped_at": "2026-01-12T15:00:00"
 }
 ```
 
 ### CSV Columns
+
 | Column | Description |
 |--------|-------------|
-| project_id | ADB Project Number |
-| title | Project Name |
-| country | Country/Countries |
-| region | Geographic Region |
-| sector | Primary Sector |
-| subsector | Subsector |
-| status | Project Status |
-| project_type | Type of Project |
-| modality | Financing Modality |
-| approval_date | Board Approval Date |
-| signing_date | Loan Signing Date |
-| closing_date | Expected Closing |
-| financing_amount | ADB Financing |
-| borrower | Borrower Name |
-| executing_agency | Executing Agency |
-| description | Project Description |
-| project_url | ADB Project Page URL |
+| csrn_id | CSRN Reference ID |
+| title | Full title of the opportunity |
+| project_name | Project name |
+| project_number | ADB Project Number |
+| country | Country/Region |
+| sector | Sector (Finance, Transport, etc.) |
+| consulting_type | Firm or Individual |
+| engagement_type | Type of engagement |
+| selection_method | Selection method (QCBS, CQS, etc.) |
+| budget_range | Budget range |
+| duration | Expected duration |
+| deadline | Submission deadline |
+| status | Current status |
+| detail_url | Link to full details |
 
-## Requirements
+## Project Types
 
-- Python 3.7+
-- requests
-- beautifulsoup4
-- selenium
-- undetected-chromedriver
-- Chrome or Firefox browser
+The scraper recognizes these ADB project types:
+- **LOAN**: Loan projects
+- **GRANT**: Grant projects  
+- **TA**: Technical Assistance
+
+## Country Codes
+
+Common ADB country codes:
+- REG: Regional
+- CAM: Cambodia
+- PRC: China
+- VIE: Vietnam
+- IND: India
+- INO: Indonesia
+- PHI: Philippines
+- BAN: Bangladesh
+- PAK: Pakistan
+- And more...
 
 ## Files
 
-- `adb_scraper.py` - Main scraper script
-- `adb_projects.json` - Scraped data in JSON format
-- `adb_projects.csv` - Scraped data in CSV format
-- `requirements.txt` - Python dependencies
+| File | Description |
+|------|-------------|
+| `adb_scraper.py` | Main scraper script |
+| `adb_consulting_opportunities.json` | Scraped data (JSON) |
+| `adb_consulting_opportunities.csv` | Scraped data (CSV) |
+| `requirements.txt` | Python dependencies |
+| `README.md` | This file |
+
+## Troubleshooting
+
+### Chrome Driver Issues
+```bash
+pip install webdriver-manager
+```
+
+### No Data Scraped
+- Check if the URL is accessible in your browser
+- Try running with `headless=False` to see the browser
+- The page structure may have changed
 
 ## License
 
 MIT License
+
+## Disclaimer
+
+This scraper is for educational and research purposes. Please respect ADB's terms of service and rate limits.
