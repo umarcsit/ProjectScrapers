@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 IsDB Tenders Scraper v2
-Properly extracts structured tender information from https://www.isdb.org/project-procurement/tenders
+Extracts structured tender information from https://www.isdb.org/project-procurement/tenders
+Outputs: JSON (full data) and CSV (clean formatted data)
 """
 
 import requests
@@ -9,8 +10,8 @@ from bs4 import BeautifulSoup
 import json
 import time
 import re
-from datetime import datetime
 import csv
+from datetime import datetime
 
 # Base URL
 BASE_URL = "https://www.isdb.org"
@@ -85,6 +86,13 @@ def extract_tenders_from_listing(content):
             tenders.append(tender)
     
     return tenders
+
+
+def clean_field(value, prefix):
+    """Remove prefix from field value"""
+    if value and value.startswith(prefix):
+        return value.replace(prefix, '').strip()
+    return value
 
 
 def extract_project_details(url):
@@ -188,12 +196,115 @@ def get_all_pages():
     return all_tenders
 
 
+def save_to_json(tenders, filename):
+    """Save tenders to JSON file"""
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(tenders, f, indent=2, ensure_ascii=False)
+    print(f"    Saved: {filename}")
+
+
+def save_to_csv(tenders, filename):
+    """Save tenders to comprehensive CSV file with clean text"""
+    
+    # Define all fields for CSV
+    fieldnames = [
+        'title',
+        'status', 
+        'tender_type',
+        'country',
+        'close_date',
+        'url',
+        'node_id',
+        'full_title',
+        'notice_type',
+        'issue_date',
+        'project_code',
+        'project_title',
+        'contact_email',
+        'description',
+        'attachments',
+        'all_emails',
+        'contract_award_company',
+        'contract_award_country',
+        'contract_award_address'
+    ]
+    
+    # Process and flatten data
+    cleaned_data = []
+    
+    for tender in tenders:
+        row = {
+            'title': tender.get('title', ''),
+            'status': tender.get('status', ''),
+            'tender_type': tender.get('tender_type', ''),
+            'country': tender.get('country', ''),
+            'close_date': tender.get('close_date', ''),
+            'url': tender.get('url', ''),
+            'node_id': tender.get('node_id', ''),
+        }
+        
+        # Extract details
+        details = tender.get('details', {})
+        
+        row['full_title'] = details.get('full_title', '')
+        
+        # Clean notice type
+        row['notice_type'] = clean_field(details.get('notice_type', ''), 'Notice Type')
+        
+        # Clean issue date
+        row['issue_date'] = clean_field(details.get('issue_date', ''), 'Issue Date')
+        
+        # Clean project code
+        row['project_code'] = clean_field(details.get('project_code', ''), 'Project code')
+        
+        # Clean project title
+        row['project_title'] = clean_field(details.get('project_title', ''), 'Project title')
+        
+        # Clean email
+        row['contact_email'] = clean_field(details.get('email', ''), 'Email')
+        
+        # Description (clean text)
+        row['description'] = details.get('description', '')
+        
+        # Attachments as list
+        attachments = details.get('attachments', [])
+        if attachments:
+            att_list = [f"{a.get('name', '')} ({a.get('url', '')})" for a in attachments]
+            row['attachments'] = ' | '.join(att_list)
+        else:
+            row['attachments'] = ''
+        
+        # All emails found
+        emails = details.get('emails_found', [])
+        row['all_emails'] = ', '.join(emails) if emails else ''
+        
+        # Contract award info
+        row['contract_award_company'] = clean_field(
+            details.get('contract_award_name', ''), 'Contract Award Company Name')
+        row['contract_award_country'] = clean_field(
+            details.get('contract_award_country', ''), 'Contract Award Company Country')
+        row['contract_award_address'] = clean_field(
+            details.get('contract_award_address', ''), 'Contract Award Company Address')
+        
+        cleaned_data.append(row)
+    
+    # Write to CSV
+    with open(filename, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(cleaned_data)
+    
+    print(f"    Saved: {filename} ({len(fieldnames)} columns)")
+
+
 def main():
+    """Main scraping function"""
     print("=" * 70)
     print("IsDB Tenders Scraper v2")
     print("=" * 70)
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
+    # Step 1: Get all tenders from listing pages
     print("[1] Fetching tender listings...")
     all_tenders = get_all_pages()
     print(f"\n    Total: {len(all_tenders)} tenders\n")
@@ -202,6 +313,7 @@ def main():
         print("ERROR: No tenders found!")
         return
     
+    # Step 2: Get detailed information for each tender
     print("[2] Fetching details for each tender...")
     for i, tender in enumerate(all_tenders, 1):
         url = tender.get('url')
@@ -213,32 +325,51 @@ def main():
                 tender['details'] = details
             time.sleep(0.5)
     
+    # Step 3: Save results
     print(f"\n[3] Saving results...")
     
-    # Save JSON
-    with open('/workspace/isdb_tenders_full.json', 'w', encoding='utf-8') as f:
-        json.dump(all_tenders, f, indent=2, ensure_ascii=False)
-    print("    Saved: isdb_tenders_full.json")
+    # Save JSON (full data)
+    save_to_json(all_tenders, 'isdb_tenders_full.json')
     
-    # Save CSV
-    with open('/workspace/isdb_tenders_summary.csv', 'w', newline='', encoding='utf-8') as f:
-        fieldnames = ['title', 'status', 'tender_type', 'country', 'close_date', 'url']
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
-        writer.writeheader()
-        for tender in all_tenders:
-            writer.writerow(tender)
-    print("    Saved: isdb_tenders_summary.csv")
+    # Save CSV (clean formatted data)
+    save_to_csv(all_tenders, 'isdb_tenders_complete.csv')
     
+    # Summary statistics
     print(f"\n{'=' * 70}")
-    print(f"COMPLETE: {len(all_tenders)} tenders scraped")
-    print("=" * 70)
+    print(f"SCRAPING COMPLETE")
+    print(f"{'=' * 70}")
+    print(f"Total tenders: {len(all_tenders)}")
+    print(f"Completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # Show samples
-    print("\nSAMPLE DATA:")
+    # Country breakdown
+    countries = {}
+    for t in all_tenders:
+        c = t.get('country', 'Unknown')
+        countries[c] = countries.get(c, 0) + 1
+    
+    print(f"\nTenders by Country:")
+    for country, count in sorted(countries.items(), key=lambda x: -x[1])[:10]:
+        print(f"  {country}: {count}")
+    
+    # Type breakdown
+    types = {}
+    for t in all_tenders:
+        tt = t.get('tender_type', 'Unknown')
+        types[tt] = types.get(tt, 0) + 1
+    
+    print(f"\nTenders by Type:")
+    for ttype, count in sorted(types.items(), key=lambda x: -x[1]):
+        print(f"  {ttype}: {count}")
+    
+    # Sample data
+    print(f"\nSample Tenders:")
     for i, t in enumerate(all_tenders[:3], 1):
         print(f"\n{i}. {t.get('title', 'N/A')[:60]}")
         print(f"   Country: {t.get('country', 'N/A')} | Type: {t.get('tender_type', 'N/A')}")
         print(f"   Status: {t.get('status', 'N/A')} | Close: {t.get('close_date', 'N/A')}")
+        if t.get('details', {}).get('project_code'):
+            code = clean_field(t['details']['project_code'], 'Project code')
+            print(f"   Project Code: {code}")
     
     return all_tenders
 
