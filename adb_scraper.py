@@ -3,11 +3,13 @@ ADB Consulting Opportunities (CSRN) Scraper
 Extracts consulting services recruitment notices from:
 https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE
 
-This scraper extracts:
+This scraper extracts FULL details including:
 - Project ID, Title, Country, Sector
 - Consulting Type (Firm/Individual)
 - Deadline, Duration, Budget
 - Selection Method, Engagement Type
+- FULL Project Description
+- Terms of Reference
 - And more...
 """
 
@@ -43,25 +45,63 @@ except ImportError:
 
 @dataclass
 class ConsultingOpportunity:
-    """Data class for ADB Consulting Opportunities (CSRN)"""
+    """Data class for ADB Consulting Opportunities (CSRN) with FULL details"""
+    # Basic Info
     csrn_id: str = ""
     title: str = ""
+    reference_number: str = ""
+    
+    # Project Info
     project_name: str = ""
     project_number: str = ""
+    project_type: str = ""  # LOAN, GRANT, TA
+    
+    # Location
     country: str = ""
+    region: str = ""
+    
+    # Classification
     sector: str = ""
+    subsector: str = ""
+    
+    # Consulting Details
     consulting_type: str = ""  # Firm or Individual
     engagement_type: str = ""
     selection_method: str = ""
+    consultant_source: str = ""  # International, National, etc.
+    
+    # Financial
     budget_range: str = ""
+    estimated_cost: str = ""
+    funding_source: str = ""
+    
+    # Timeline
     duration: str = ""
     deadline: str = ""
     published_date: str = ""
+    contract_start_date: str = ""
+    
+    # Status
     status: str = ""
+    
+    # Organizations
     executing_agency: str = ""
+    implementing_agency: str = ""
+    
+    # Full Description & TOR
     description: str = ""
+    objectives: str = ""
+    scope_of_work: str = ""
+    deliverables: str = ""
+    qualifications: str = ""
+    terms_of_reference: str = ""
     terms_of_reference_url: str = ""
+    
+    # Links
     detail_url: str = ""
+    project_page_url: str = ""
+    
+    # Metadata
     scraped_at: str = field(default_factory=lambda: datetime.now().isoformat())
 
 
@@ -69,10 +109,58 @@ class ADBConsultingScraper:
     """
     Scraper for ADB Consulting Opportunities (CSRN)
     URL: https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE
+    
+    Fetches FULL project details including descriptions and TOR.
     """
     
     BASE_URL = "https://selfservice.adb.org"
     CSRN_URL = "https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN_HOME_PAGE"
+    ADB_PROJECTS_URL = "https://www.adb.org/projects"
+    
+    # Country code mappings
+    COUNTRY_CODES = {
+        'REG': 'Regional',
+        'CAM': 'Cambodia',
+        'PRC': 'China',
+        'VIE': 'Vietnam',
+        'IND': 'India',
+        'INO': 'Indonesia',
+        'PHI': 'Philippines',
+        'BAN': 'Bangladesh',
+        'PAK': 'Pakistan',
+        'SRI': 'Sri Lanka',
+        'NEP': 'Nepal',
+        'MYA': 'Myanmar',
+        'THA': 'Thailand',
+        'LAO': 'Lao PDR',
+        'MON': 'Mongolia',
+        'UZB': 'Uzbekistan',
+        'KAZ': 'Kazakhstan',
+        'KGZ': 'Kyrgyz Republic',
+        'TAJ': 'Tajikistan',
+        'TKM': 'Turkmenistan',
+        'AFG': 'Afghanistan',
+        'ARM': 'Armenia',
+        'AZE': 'Azerbaijan',
+        'GEO': 'Georgia',
+        'PNG': 'Papua New Guinea',
+        'FIJ': 'Fiji',
+        'SAM': 'Samoa',
+        'TON': 'Tonga',
+        'VAN': 'Vanuatu',
+        'SOL': 'Solomon Islands',
+        'TIM': 'Timor-Leste',
+        'MLD': 'Maldives',
+        'BHU': 'Bhutan',
+        'COO': 'Cook Islands',
+        'FSM': 'Micronesia',
+        'KIR': 'Kiribati',
+        'NAU': 'Nauru',
+        'NIU': 'Niue',
+        'PAL': 'Palau',
+        'RMI': 'Marshall Islands',
+        'TUV': 'Tuvalu',
+    }
     
     def __init__(self, headless: bool = True, delay: float = 2.0):
         """
@@ -136,68 +224,62 @@ class ADBConsultingScraper:
         """Extract project details from title string"""
         details = {}
         
-        # Extract project number from title (format: LOAN-XXXX, GRANT-XXXX, TA-XXXX)
+        # Extract project type and number (LOAN-XXXX, GRANT-XXXX, TA-XXXX)
         proj_match = re.search(r'(LOAN|GRANT|TA|L|G)-?(\d+)', title, re.IGNORECASE)
         if proj_match:
-            details['project_type'] = proj_match.group(1).upper()
-            details['project_number'] = proj_match.group(2)
+            ptype = proj_match.group(1).upper()
+            if ptype == 'L':
+                ptype = 'LOAN'
+            elif ptype == 'G':
+                ptype = 'GRANT'
+            details['project_type'] = ptype
         
         # Extract ADB project ID (format: XXXXX-XXX in parentheses)
         adb_id_match = re.search(r'\((\d{5}-\d{3})\)', title)
         if adb_id_match:
-            details['project_id'] = adb_id_match.group(1)
+            details['project_number'] = adb_id_match.group(1)
         
-        # Extract country codes (3-letter codes like REG, CAM, PRC, VIE, etc.)
-        country_codes = {
-            'REG': 'Regional',
-            'CAM': 'Cambodia',
-            'PRC': 'China',
-            'VIE': 'Vietnam',
-            'IND': 'India',
-            'INO': 'Indonesia',
-            'PHI': 'Philippines',
-            'BAN': 'Bangladesh',
-            'PAK': 'Pakistan',
-            'SRI': 'Sri Lanka',
-            'NEP': 'Nepal',
-            'MYA': 'Myanmar',
-            'THA': 'Thailand',
-            'LAO': 'Lao PDR',
-            'MON': 'Mongolia',
-            'UZB': 'Uzbekistan',
-            'KAZ': 'Kazakhstan',
-            'KGZ': 'Kyrgyz Republic',
-            'TAJ': 'Tajikistan',
-            'TKM': 'Turkmenistan',
-            'AFG': 'Afghanistan',
-            'ARM': 'Armenia',
-            'AZE': 'Azerbaijan',
-            'GEO': 'Georgia',
-            'PNG': 'Papua New Guinea',
-            'FIJ': 'Fiji',
-            'SAM': 'Samoa',
-            'TON': 'Tonga',
-            'VAN': 'Vanuatu',
-            'SOL': 'Solomon Islands',
-            'TIM': 'Timor-Leste',
-            'MLD': 'Maldives',
-            'BHU': 'Bhutan',
-        }
-        
+        # Extract country code
         country_match = re.search(r'\b([A-Z]{3}):', title)
         if country_match:
             code = country_match.group(1)
-            details['country'] = country_codes.get(code, code)
+            details['country'] = self.COUNTRY_CODES.get(code, code)
+        
+        # Extract project name (text between country code and package description)
+        name_match = re.search(r'[A-Z]{3}:\s*([^-]+?)(?:\s*-\s*|\s*\()', title)
+        if name_match:
+            details['project_name'] = name_match.group(1).strip()
         
         return details
     
-    def scrape_opportunities(self, max_pages: int = 10, fetch_details: bool = False) -> List[ConsultingOpportunity]:
+    def _get_csrn_detail_page(self, row_element) -> Optional[str]:
+        """Click on a row to get the detail page URL"""
+        try:
+            # Find clickable link in the row
+            links = row_element.find_elements(By.TAG_NAME, "a")
+            for link in links:
+                href = link.get_attribute('href') or ''
+                text = link.text.strip()
+                
+                # Skip navigation links
+                if text in ['Next', 'Previous', 'Next 25', 'Previous 25', '']:
+                    continue
+                
+                # Click to view details
+                if 'CsrnId' in href or 'view_csrn' in href:
+                    return href
+                
+            return None
+        except:
+            return None
+    
+    def scrape_opportunities(self, max_pages: int = 10, fetch_details: bool = True) -> List[ConsultingOpportunity]:
         """
         Scrape consulting opportunities from ADB CSRN portal
         
         Args:
             max_pages: Maximum pages to scrape
-            fetch_details: Whether to fetch detailed info for each opportunity
+            fetch_details: Whether to fetch FULL detailed info for each opportunity
             
         Returns:
             List of ConsultingOpportunity objects
@@ -221,8 +303,8 @@ class ADBConsultingScraper:
             results_table = self._wait_for_element(By.ID, "atResults")
             
             if not results_table:
-                print("⚠ Could not find results table, trying alternative selectors...")
-                results_table = self._wait_for_element(By.CSS_SELECTOR, "table[id*='Results'], table.x1h")
+                print("⚠ Could not find results table")
+                return []
             
             all_opportunities = []
             page_num = 1
@@ -230,7 +312,7 @@ class ADBConsultingScraper:
             while page_num <= max_pages:
                 print(f"\n📄 Scraping page {page_num}...")
                 
-                # Parse current page
+                # Parse current page - get basic info and detail URLs
                 page_opportunities = self._parse_results_page()
                 
                 # Filter out navigation elements
@@ -258,9 +340,11 @@ class ADBConsultingScraper:
                 page_num += 1
                 time.sleep(self.delay)
             
-            # Convert to ConsultingOpportunity objects
+            print(f"\n📋 Processing {len(all_opportunities)} opportunities...")
+            
+            # Convert to ConsultingOpportunity objects and fetch details
             self.opportunities = []
-            for opp_dict in all_opportunities:
+            for i, opp_dict in enumerate(all_opportunities):
                 # Parse additional details from title
                 title_details = self._parse_title_for_details(opp_dict.get('title', ''))
                 opp_dict.update({k: v for k, v in title_details.items() if not opp_dict.get(k)})
@@ -268,32 +352,25 @@ class ADBConsultingScraper:
                 opp = ConsultingOpportunity(
                     csrn_id=opp_dict.get('csrn_id', ''),
                     title=opp_dict.get('title', ''),
+                    reference_number=opp_dict.get('reference_number', ''),
                     project_name=opp_dict.get('project_name', ''),
-                    project_number=opp_dict.get('project_number', opp_dict.get('project_id', '')),
+                    project_number=opp_dict.get('project_number', ''),
+                    project_type=opp_dict.get('project_type', ''),
                     country=opp_dict.get('country', ''),
                     sector=opp_dict.get('sector', ''),
                     consulting_type=opp_dict.get('consulting_type', ''),
-                    engagement_type=opp_dict.get('engagement_type', ''),
-                    selection_method=opp_dict.get('selection_method', ''),
-                    budget_range=opp_dict.get('budget_range', ''),
-                    duration=opp_dict.get('duration', ''),
                     deadline=opp_dict.get('deadline', ''),
-                    published_date=opp_dict.get('published_date', ''),
-                    status=opp_dict.get('status', 'Open'),
-                    executing_agency=opp_dict.get('executing_agency', ''),
-                    description=opp_dict.get('description', ''),
                     detail_url=opp_dict.get('detail_url', ''),
+                    status='Open',
                 )
+                
+                # Fetch full details if requested
+                if fetch_details and opp.detail_url:
+                    print(f"   [{i+1}/{len(all_opportunities)}] Fetching details: {opp.title[:50]}...")
+                    self._fetch_full_details(opp)
+                    time.sleep(1)  # Be respectful to the server
+                
                 self.opportunities.append(opp)
-            
-            # Fetch additional details if requested
-            if fetch_details and self.opportunities:
-                print(f"\n📋 Fetching detailed information...")
-                for i, opp in enumerate(self.opportunities[:20]):  # Limit to first 20 for speed
-                    if opp.detail_url and 'adb.org/projects' in opp.detail_url:
-                        print(f"   [{i+1}] Fetching details for: {opp.title[:50]}...")
-                        self._fetch_opportunity_details(opp)
-                        time.sleep(1)
             
             print(f"\n✅ Total opportunities scraped: {len(self.opportunities)}")
             return self.opportunities
@@ -312,7 +389,6 @@ class ADBConsultingScraper:
         opportunities = []
         
         try:
-            # Method 1: Parse using Selenium
             table = self.driver.find_element(By.ID, "atResults")
             rows = table.find_elements(By.TAG_NAME, "tr")
             
@@ -324,11 +400,10 @@ class ADBConsultingScraper:
                     
                     opp = {}
                     row_text = row.text
+                    row_html = row.get_attribute('innerHTML')
                     
                     # Skip pagination rows
-                    if 'Next' in row_text and len(row_text) < 20:
-                        continue
-                    if 'Previous' in row_text and len(row_text) < 20:
+                    if ('Next' in row_text or 'Previous' in row_text) and len(row_text) < 30:
                         continue
                     
                     # Find all links in the row
@@ -345,17 +420,21 @@ class ADBConsultingScraper:
                         if text and len(text) > 15:
                             opp['title'] = text
                             opp['detail_url'] = href
+                            
+                            # Extract CSRN ID from href
+                            csrn_match = re.search(r'CsrnId[=:](\d+)', href)
+                            if csrn_match:
+                                opp['csrn_id'] = csrn_match.group(1)
                     
-                    # Extract consulting type from icon or text
-                    if 'Firm' in row_text or 'firm' in row.get_attribute('innerHTML').lower():
+                    # Extract consulting type
+                    if 'Firm' in row_text or 'imgFirm' in row_html:
                         opp['consulting_type'] = 'Firm'
-                    elif 'Individual' in row_text or 'individual' in row.get_attribute('innerHTML').lower():
+                    elif 'Individual' in row_text or 'imgIndividual' in row_html:
                         opp['consulting_type'] = 'Individual'
                     
                     # Try to extract deadline from cells
                     for cell in cells:
                         cell_text = cell.text.strip()
-                        # Check if it looks like a date
                         if re.match(r'\d{1,2}[-/]\w{3}[-/]\d{4}', cell_text):
                             opp['deadline'] = cell_text
                         elif re.match(r'\d{4}[-/]\d{2}[-/]\d{2}', cell_text):
@@ -371,59 +450,217 @@ class ADBConsultingScraper:
             
         except Exception as e:
             print(f"   ⚠ Error parsing table: {e}")
-            
-            # Method 2: Try BeautifulSoup parsing
-            if BS4_AVAILABLE:
-                try:
-                    soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-                    table = soup.find(id='atResults')
-                    
-                    if table:
-                        for row in table.find_all('tr'):
-                            cells = row.find_all('td')
-                            if len(cells) < 2:
-                                continue
-                            
-                            opp = {}
-                            row_text = row.get_text()
-                            
-                            # Find links
-                            for link in row.find_all('a'):
-                                text = link.get_text(strip=True)
-                                href = link.get('href', '')
-                                
-                                if text and len(text) > 15 and text not in ['Next', 'Previous', 'Next 25']:
-                                    opp['title'] = text
-                                    opp['detail_url'] = href if href.startswith('http') else self.BASE_URL + href
-                            
-                            if 'Firm' in row_text:
-                                opp['consulting_type'] = 'Firm'
-                            elif 'Individual' in row_text:
-                                opp['consulting_type'] = 'Individual'
-                            
-                            if opp.get('title'):
-                                opportunities.append(opp)
-                except Exception:
-                    pass
         
         return opportunities
+    
+    def _fetch_full_details(self, opportunity: ConsultingOpportunity):
+        """Fetch FULL detailed information for an opportunity"""
+        if not opportunity.detail_url:
+            return
+        
+        try:
+            # Navigate to detail page
+            self.driver.get(opportunity.detail_url)
+            time.sleep(3)
+            
+            # Get page source for parsing
+            page_source = self.driver.page_source
+            page_text = self.driver.find_element(By.TAG_NAME, 'body').text
+            
+            # Use BeautifulSoup for better parsing if available
+            if BS4_AVAILABLE:
+                soup = BeautifulSoup(page_source, 'html.parser')
+                self._parse_detail_page_bs4(opportunity, soup, page_text)
+            else:
+                self._parse_detail_page_selenium(opportunity, page_text)
+            
+            # Also try to get ADB project page details if available
+            if opportunity.project_number and not opportunity.description:
+                project_url = f"https://www.adb.org/projects/{opportunity.project_number}/main"
+                self._fetch_adb_project_details(opportunity, project_url)
+            
+        except Exception as e:
+            print(f"      ⚠ Error fetching details: {e}")
+    
+    def _parse_detail_page_bs4(self, opp: ConsultingOpportunity, soup: BeautifulSoup, page_text: str):
+        """Parse detail page using BeautifulSoup"""
+        
+        # Find all table rows and extract key-value pairs
+        for row in soup.find_all('tr'):
+            cells = row.find_all(['td', 'th'])
+            if len(cells) >= 2:
+                label = cells[0].get_text(strip=True).lower()
+                value = cells[1].get_text(strip=True)
+                
+                # Map labels to fields
+                if 'project name' in label or 'project title' in label:
+                    opp.project_name = value
+                elif 'project number' in label or 'project no' in label:
+                    opp.project_number = value
+                elif 'country' in label:
+                    opp.country = value
+                elif 'sector' in label and 'sub' not in label:
+                    opp.sector = value
+                elif 'subsector' in label:
+                    opp.subsector = value
+                elif 'consultant type' in label or 'consulting type' in label:
+                    opp.consulting_type = value
+                elif 'engagement type' in label:
+                    opp.engagement_type = value
+                elif 'selection method' in label:
+                    opp.selection_method = value
+                elif 'consultant source' in label or 'source' in label:
+                    opp.consultant_source = value
+                elif 'budget' in label or 'estimated cost' in label:
+                    if not opp.budget_range:
+                        opp.budget_range = value
+                    opp.estimated_cost = value
+                elif 'duration' in label:
+                    opp.duration = value
+                elif 'deadline' in label or 'submission' in label:
+                    opp.deadline = value
+                elif 'publish' in label or 'posted' in label:
+                    opp.published_date = value
+                elif 'executing agency' in label:
+                    opp.executing_agency = value
+                elif 'implementing agency' in label:
+                    opp.implementing_agency = value
+                elif 'funding' in label:
+                    opp.funding_source = value
+                elif 'status' in label:
+                    opp.status = value
+        
+        # Extract description sections
+        self._extract_description_sections(opp, page_text, soup)
+        
+        # Find TOR download link
+        for link in soup.find_all('a'):
+            href = link.get('href', '')
+            text = link.get_text(strip=True).lower()
+            if 'tor' in text or 'terms of reference' in text or '.pdf' in href.lower():
+                opp.terms_of_reference_url = href if href.startswith('http') else self.BASE_URL + href
+                break
+    
+    def _parse_detail_page_selenium(self, opp: ConsultingOpportunity, page_text: str):
+        """Parse detail page using regex patterns"""
+        
+        patterns = {
+            'project_name': [r'Project Name[:\s]*([^\n]+)', r'Project Title[:\s]*([^\n]+)'],
+            'project_number': [r'Project Number[:\s]*([^\n]+)', r'Project No[:\s]*([^\n]+)'],
+            'country': [r'Country[:\s]*([^\n]+)'],
+            'sector': [r'(?<!Sub)Sector[:\s]*([^\n]+)'],
+            'subsector': [r'Subsector[:\s]*([^\n]+)', r'Sub-?sector[:\s]*([^\n]+)'],
+            'consulting_type': [r'Consultant Type[:\s]*([^\n]+)'],
+            'engagement_type': [r'Engagement Type[:\s]*([^\n]+)'],
+            'selection_method': [r'Selection Method[:\s]*([^\n]+)'],
+            'consultant_source': [r'Consultant Source[:\s]*([^\n]+)', r'Source[:\s]*(International|National|Regional)'],
+            'budget_range': [r'Budget[:\s]*([^\n]+)', r'Estimated Cost[:\s]*([^\n]+)'],
+            'duration': [r'Duration[:\s]*([^\n]+)'],
+            'deadline': [r'Deadline[:\s]*([^\n]+)', r'Submission[:\s]*([^\n]+)'],
+            'published_date': [r'Published[:\s]*([^\n]+)', r'Posted[:\s]*([^\n]+)'],
+            'executing_agency': [r'Executing Agency[:\s]*([^\n]+)'],
+            'implementing_agency': [r'Implementing Agency[:\s]*([^\n]+)'],
+            'funding_source': [r'Funding[:\s]*([^\n]+)'],
+        }
+        
+        for field, pattern_list in patterns.items():
+            if not getattr(opp, field):
+                for pattern in pattern_list:
+                    match = re.search(pattern, page_text, re.IGNORECASE)
+                    if match:
+                        setattr(opp, field, match.group(1).strip()[:500])
+                        break
+        
+        # Extract description
+        self._extract_description_sections(opp, page_text, None)
+    
+    def _extract_description_sections(self, opp: ConsultingOpportunity, page_text: str, soup=None):
+        """Extract description, objectives, scope, etc."""
+        
+        # Description patterns
+        desc_patterns = [
+            r'Description[:\s]*\n([^\n](?:.*?\n)*?)(?=\n[A-Z][a-z]+:|$)',
+            r'Project Description[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)',
+            r'Background[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)',
+        ]
+        
+        for pattern in desc_patterns:
+            match = re.search(pattern, page_text, re.IGNORECASE | re.DOTALL)
+            if match and not opp.description:
+                opp.description = match.group(1).strip()[:3000]
+                break
+        
+        # Objectives
+        obj_match = re.search(r'Objectives?[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)', page_text, re.IGNORECASE | re.DOTALL)
+        if obj_match:
+            opp.objectives = obj_match.group(1).strip()[:2000]
+        
+        # Scope of Work
+        scope_match = re.search(r'Scope of Work[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)', page_text, re.IGNORECASE | re.DOTALL)
+        if scope_match:
+            opp.scope_of_work = scope_match.group(1).strip()[:3000]
+        
+        # Deliverables
+        deliv_match = re.search(r'Deliverables?[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)', page_text, re.IGNORECASE | re.DOTALL)
+        if deliv_match:
+            opp.deliverables = deliv_match.group(1).strip()[:2000]
+        
+        # Qualifications
+        qual_match = re.search(r'Qualifications?[:\s]*\n(.*?)(?=\n[A-Z][a-z]+:|$)', page_text, re.IGNORECASE | re.DOTALL)
+        if qual_match:
+            opp.qualifications = qual_match.group(1).strip()[:2000]
+        
+        # If using BeautifulSoup, also try to find content divs
+        if soup:
+            for div in soup.find_all(['div', 'td'], class_=lambda x: x and ('content' in str(x).lower() or 'description' in str(x).lower())):
+                text = div.get_text(strip=True)
+                if len(text) > 100 and not opp.description:
+                    opp.description = text[:3000]
+                    break
+    
+    def _fetch_adb_project_details(self, opp: ConsultingOpportunity, project_url: str):
+        """Fetch additional details from ADB project page"""
+        try:
+            self.driver.get(project_url)
+            time.sleep(2)
+            
+            page_text = self.driver.find_element(By.TAG_NAME, 'body').text
+            
+            # Extract description if not already set
+            if not opp.description:
+                desc_match = re.search(r'Description\s*\n(.*?)(?=\n[A-Z][a-z]+\s*\n|$)', page_text, re.DOTALL)
+                if desc_match:
+                    opp.description = desc_match.group(1).strip()[:3000]
+            
+            # Extract other fields
+            if not opp.sector:
+                sector_match = re.search(r'Sector[:\s]*([^\n]+)', page_text)
+                if sector_match:
+                    opp.sector = sector_match.group(1).strip()
+            
+            if not opp.country:
+                country_match = re.search(r'Country[:\s]*([^\n]+)', page_text)
+                if country_match:
+                    opp.country = country_match.group(1).strip()
+            
+            opp.project_page_url = project_url
+            
+        except Exception:
+            pass
     
     def _go_to_next_page(self) -> bool:
         """Try to navigate to next page"""
         try:
-            # Try various selectors for next button
             next_selectors = [
                 "//a[contains(text(), 'Next')]",
                 "//img[@title='Next']/parent::a",
                 "//a[@title='Next']",
-                "//td[contains(@class, 'xh')]//a[contains(text(), 'Next')]",
             ]
             
             for xpath in next_selectors:
                 try:
                     next_btn = self.driver.find_element(By.XPATH, xpath)
                     if next_btn.is_displayed():
-                        # Scroll to element
                         self.driver.execute_script("arguments[0].scrollIntoView(true);", next_btn)
                         time.sleep(0.5)
                         next_btn.click()
@@ -432,55 +669,10 @@ class ADBConsultingScraper:
                 except:
                     continue
             
-            # Try CSS selectors
-            css_selectors = [
-                "a[title*='Next']",
-                "a.xh[href*='Next']",
-                "img[alt='Next']",
-            ]
-            
-            for css in css_selectors:
-                try:
-                    next_btn = self.driver.find_element(By.CSS_SELECTOR, css)
-                    if next_btn.is_displayed():
-                        self.driver.execute_script("arguments[0].click();", next_btn)
-                        time.sleep(3)
-                        return True
-                except:
-                    continue
-            
             return False
             
         except Exception:
             return False
-    
-    def _fetch_opportunity_details(self, opportunity: ConsultingOpportunity):
-        """Fetch additional details for an opportunity"""
-        if not opportunity.detail_url:
-            return
-        
-        try:
-            self.driver.get(opportunity.detail_url)
-            time.sleep(2)
-            
-            page_text = self.driver.find_element(By.TAG_NAME, 'body').text
-            
-            # Extract additional fields
-            patterns = {
-                'sector': r'Sector[:\s]*([^\n]+)',
-                'country': r'Country[:\s]*([^\n]+)',
-                'executing_agency': r'Executing Agency[:\s]*([^\n]+)',
-                'description': r'Description[:\s]*([^\n]+)',
-            }
-            
-            for field, pattern in patterns.items():
-                if not getattr(opportunity, field):
-                    match = re.search(pattern, page_text, re.IGNORECASE)
-                    if match:
-                        setattr(opportunity, field, match.group(1).strip()[:500])
-            
-        except Exception:
-            pass
     
     def save_to_json(self, filename: str = "adb_consulting_opportunities.json"):
         """Save opportunities to JSON file"""
@@ -518,9 +710,7 @@ class ADBConsultingScraper:
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            self.opportunities = [
-                ConsultingOpportunity(**item) for item in data
-            ]
+            self.opportunities = [ConsultingOpportunity(**item) for item in data]
             print(f"✓ Loaded {len(self.opportunities)} opportunities from {filename}")
             return self.opportunities
         except Exception as e:
@@ -528,24 +718,32 @@ class ADBConsultingScraper:
             return []
     
     def print_summary(self):
-        """Print summary of scraped opportunities"""
+        """Print detailed summary of scraped opportunities"""
         if not self.opportunities:
             print("❌ No opportunities loaded")
             return
         
-        print("\n" + "=" * 70)
+        print("\n" + "=" * 80)
         print(f"📊 CONSULTING OPPORTUNITIES SUMMARY: {len(self.opportunities)} total")
-        print("=" * 70)
+        print("=" * 80)
         
-        # Count by type
+        # Statistics
         types = {}
         countries = {}
+        sectors = {}
+        with_description = 0
         
         for opp in self.opportunities:
             if opp.consulting_type:
                 types[opp.consulting_type] = types.get(opp.consulting_type, 0) + 1
             if opp.country:
                 countries[opp.country] = countries.get(opp.country, 0) + 1
+            if opp.sector:
+                sectors[opp.sector] = sectors.get(opp.sector, 0) + 1
+            if opp.description:
+                with_description += 1
+        
+        print(f"\n📝 Opportunities with full description: {with_description}/{len(self.opportunities)}")
         
         if types:
             print("\n📌 By Consulting Type:")
@@ -553,48 +751,72 @@ class ADBConsultingScraper:
                 print(f"   • {t}: {count}")
         
         if countries:
-            print("\n🌍 By Country:")
+            print("\n🌍 By Country (Top 15):")
             for country, count in sorted(countries.items(), key=lambda x: -x[1])[:15]:
                 print(f"   • {country}: {count}")
         
-        print("\n" + "-" * 70)
-        print("📋 Sample Opportunities:")
-        print("-" * 70)
+        if sectors:
+            print("\n🏢 By Sector (Top 10):")
+            for sector, count in sorted(sectors.items(), key=lambda x: -x[1])[:10]:
+                print(f"   • {sector}: {count}")
         
-        # Filter for valid opportunities
-        valid_opps = [o for o in self.opportunities if len(o.title) > 20]
+        print("\n" + "-" * 80)
+        print("📋 Sample Opportunities (with details):")
+        print("-" * 80)
         
-        for i, opp in enumerate(valid_opps[:10]):
-            print(f"\n[{i+1}] {opp.title[:80]}...")
-            print(f"    Type: {opp.consulting_type or 'N/A'}")
-            print(f"    Country: {opp.country or 'N/A'}")
-            print(f"    Project #: {opp.project_number or 'N/A'}")
-            if opp.deadline:
-                print(f"    Deadline: {opp.deadline}")
-            if opp.detail_url:
-                print(f"    URL: {opp.detail_url[:60]}...")
+        # Show samples with descriptions
+        samples = [o for o in self.opportunities if o.description][:5]
+        if not samples:
+            samples = self.opportunities[:5]
+        
+        for i, opp in enumerate(samples):
+            print(f"\n{'='*60}")
+            print(f"[{i+1}] {opp.title[:70]}...")
+            print(f"{'='*60}")
+            print(f"  📋 Project Number: {opp.project_number or 'N/A'}")
+            print(f"  🏷️  Type: {opp.consulting_type or 'N/A'}")
+            print(f"  🌍 Country: {opp.country or 'N/A'}")
+            print(f"  🏢 Sector: {opp.sector or 'N/A'}")
+            print(f"  ⏰ Deadline: {opp.deadline or 'N/A'}")
+            print(f"  💰 Budget: {opp.budget_range or 'N/A'}")
+            print(f"  ⏱️  Duration: {opp.duration or 'N/A'}")
+            print(f"  🔗 URL: {opp.detail_url[:60] if opp.detail_url else 'N/A'}...")
+            
+            if opp.description:
+                print(f"\n  📝 Description:")
+                print(f"     {opp.description[:300]}...")
+            
+            if opp.scope_of_work:
+                print(f"\n  📋 Scope of Work:")
+                print(f"     {opp.scope_of_work[:200]}...")
 
 
 def main():
     """Main function to run the scraper"""
     print("""
-╔══════════════════════════════════════════════════════════════════════╗
-║     ADB CONSULTING OPPORTUNITIES SCRAPER (CSRN)                      ║
-╠══════════════════════════════════════════════════════════════════════╣
-║  Source: https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=          ║
-║          XXCRS_CSRN_HOME_PAGE                                        ║
-║                                                                      ║
-║  Extracts: Title, Project Number, Country, Consulting Type,         ║
-║            Deadline, Budget, Selection Method, and more...          ║
-╚══════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════════╗
+║        ADB CONSULTING OPPORTUNITIES SCRAPER (CSRN) - FULL DETAILS           ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  Source: https://selfservice.adb.org/OA_HTML/OA.jsp?OAFunc=XXCRS_CSRN...    ║
+║                                                                              ║
+║  Extracts FULL details including:                                            ║
+║  • Project description, objectives, scope of work                            ║
+║  • Qualifications, deliverables                                              ║
+║  • Budget, duration, deadline                                                ║
+║  • Country, sector, consulting type                                          ║
+║  • Terms of reference links                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
     """)
     
     # Initialize scraper
     scraper = ADBConsultingScraper(headless=True, delay=2.0)
     
     try:
-        # Scrape opportunities
-        opportunities = scraper.scrape_opportunities(max_pages=10, fetch_details=False)
+        # Scrape opportunities WITH full details
+        opportunities = scraper.scrape_opportunities(
+            max_pages=5,        # Scrape 5 pages
+            fetch_details=True  # Fetch FULL details for each opportunity
+        )
         
         if opportunities:
             # Save results
@@ -605,7 +827,6 @@ def main():
             scraper.print_summary()
         else:
             print("\n⚠ No opportunities were scraped.")
-            print("   The page structure may have changed.")
             
     except Exception as e:
         print(f"\n❌ Error: {e}")
