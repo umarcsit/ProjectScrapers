@@ -19,10 +19,22 @@ class WWFScraper:
     
     def __init__(self):
         self.session = requests.Session()
+        # More comprehensive browser-like headers
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+            'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'sec-ch-ua-mobile': '?0',
+            'sec-ch-ua-platform': '"Windows"',
         })
         self.projects = []
     
@@ -30,6 +42,10 @@ class WWFScraper:
         """Fetch the webpage content."""
         target_url = url or self.BASE_URL
         try:
+            # First visit the main site to get cookies
+            self.session.get('https://wwf.org.pk/', timeout=30)
+            time.sleep(1)
+            
             response = self.session.get(target_url, timeout=30)
             response.raise_for_status()
             return response.text
@@ -37,155 +53,163 @@ class WWFScraper:
             print(f"Error fetching {target_url}: {e}")
             return None
     
-    def parse_projects(self, html_content):
-        """Parse HTML and extract project information."""
+    def parse_consultancy_projects(self, html_content):
+        """Parse HTML and extract individual consultancy projects."""
         if not html_content:
             return []
         
         soup = BeautifulSoup(html_content, 'html.parser')
         projects = []
         
-        # Try multiple selectors to find project listings
-        # Common patterns for consultancy/tender pages
-        selectors = [
-            'article',
-            '.post',
-            '.consultancy-item',
-            '.tender-item',
-            '.project-item',
-            '.entry',
-            '.listing-item',
-            'table tr',
-            '.card',
-            '.job-listing',
-            '.opportunity',
-            'div[class*="consult"]',
-            'div[class*="tender"]',
-            'div[class*="project"]',
-        ]
+        # The WWF page typically lists consultancies with numbered titles
+        # Pattern: "XXX-Project Title" followed by submission details and links
         
-        items = []
-        for selector in selectors:
-            found = soup.select(selector)
-            if found:
-                items = found
-                print(f"Found {len(found)} items using selector: {selector}")
-                break
+        # Find all text content and parse it
+        body_text = soup.get_text()
         
-        # If no specific items found, try to extract from the main content
-        if not items:
-            # Look for the main content area
-            main_content = soup.find('main') or soup.find('div', class_='content') or soup.find('div', id='content')
-            if main_content:
-                items = [main_content]
-            else:
-                items = [soup.body] if soup.body else [soup]
+        # Look for patterns like "211-Financial Monitoring Expert..."
+        # Each project has: Number-Title, submission info, deadline, TOR link, Application form link
         
-        # Extract project details
-        for item in items:
-            project = self._extract_project_details(item)
-            if project and project.get('title'):
-                projects.append(project)
+        # Try to find project entries by looking for numbered patterns
+        project_pattern = re.compile(
+            r'(\d{1,3})\s*[-–]\s*(.+?)(?=Send your proposals|$)',
+            re.DOTALL
+        )
         
-        # Also try to find downloadable documents (PDFs, DOCs)
-        documents = self._extract_documents(soup)
-        if documents:
-            for doc in documents:
-                projects.append({
-                    'type': 'document',
-                    'title': doc.get('text', 'Document'),
-                    'url': doc.get('url'),
+        # Find all links (for TOR and Application forms)
+        all_links = {}
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            text = link.get_text(strip=True)
+            if href.endswith('.pdf') or 'terms' in text.lower() or 'application' in text.lower():
+                all_links[text] = self._make_absolute_url(href)
+        
+        # Parse the main content looking for project blocks
+        # Find all elements that might contain project info
+        content_blocks = soup.find_all(['p', 'div', 'td', 'li'])
+        
+        current_project = None
+        
+        for block in content_blocks:
+            text = block.get_text(strip=True)
+            
+            # Check if this starts a new project (numbered title)
+            number_match = re.match(r'^(\d{1,3})\s*[-–]\s*(.+)', text)
+            
+            if number_match:
+                # Save previous project
+                if current_project and current_project.get('title'):
+                    projects.append(current_project)
+                
+                # Start new project
+                project_number = number_match.group(1)
+                title_text = number_match.group(2)
+                
+                # Extract deadline if present in the text
+                deadline_match = re.search(r'not\s*later\s*than\s*([\d-]+)', text, re.I)
+                deadline = deadline_match.group(1) if deadline_match else None
+                
+                # Extract email addresses
+                emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', text)
+                
+                current_project = {
+                    'project_number': project_number,
+                    'title': title_text.split('Send your')[0].strip() if 'Send your' in title_text else title_text,
+                    'deadline': deadline,
+                    'contact_emails': emails if emails else None,
+                    'links': [],
                     'extracted_at': datetime.now().isoformat()
-                })
+                }
+                
+                # Find associated links within this block
+                for link in block.find_all('a', href=True):
+                    link_text = link.get_text(strip=True)
+                    link_url = self._make_absolute_url(link['href'])
+                    current_project['links'].append({
+                        'text': link_text,
+                        'url': link_url
+                    })
+        
+        # Don't forget the last project
+        if current_project and current_project.get('title'):
+            projects.append(current_project)
+        
+        # If we didn't find structured projects, try alternative parsing
+        if not projects:
+            projects = self._alternative_parse(soup)
         
         return projects
     
-    def _extract_project_details(self, element):
-        """Extract details from a single project element."""
-        project = {}
+    def _alternative_parse(self, soup):
+        """Alternative parsing method for different page structures."""
+        projects = []
         
-        # Extract title
-        title_elem = (
-            element.find(['h1', 'h2', 'h3', 'h4', 'h5']) or
-            element.find(class_=re.compile(r'title|heading', re.I)) or
-            element.find('a')
-        )
-        if title_elem:
-            project['title'] = title_elem.get_text(strip=True)
-            if title_elem.name == 'a' and title_elem.get('href'):
-                project['link'] = self._make_absolute_url(title_elem['href'])
+        # Look for any text blocks containing project-like information
+        text_content = soup.get_text(separator='\n')
         
-        # Extract description/content
-        desc_elem = (
-            element.find(class_=re.compile(r'desc|content|excerpt|summary', re.I)) or
-            element.find('p')
-        )
-        if desc_elem:
-            project['description'] = desc_elem.get_text(strip=True)
+        # Split by project numbers
+        lines = text_content.split('\n')
+        current_project = {}
         
-        # Extract date
-        date_elem = (
-            element.find('time') or
-            element.find(class_=re.compile(r'date|posted|published', re.I))
-        )
-        if date_elem:
-            project['date'] = date_elem.get_text(strip=True)
-            if date_elem.get('datetime'):
-                project['datetime'] = date_elem['datetime']
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check for project number pattern
+            num_match = re.match(r'^(\d{1,3})\s*[-–]\s*(.+)', line)
+            if num_match:
+                if current_project.get('title'):
+                    projects.append(current_project)
+                
+                current_project = {
+                    'project_number': num_match.group(1),
+                    'title': num_match.group(2).strip(),
+                    'extracted_at': datetime.now().isoformat()
+                }
+            
+            # Check for deadline
+            elif 'not later than' in line.lower():
+                date_match = re.search(r'(\d{4}[-/]\d{2}[-/]\d{2})', line)
+                if date_match and current_project:
+                    current_project['deadline'] = date_match.group(1)
+            
+            # Check for email
+            elif '@' in line and current_project:
+                emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', line)
+                if emails:
+                    current_project['contact_emails'] = emails
         
-        # Extract deadline if present
-        deadline_elem = element.find(string=re.compile(r'deadline|closing|last date', re.I))
-        if deadline_elem:
-            parent = deadline_elem.parent
-            if parent:
-                project['deadline'] = parent.get_text(strip=True)
+        if current_project.get('title'):
+            projects.append(current_project)
         
-        # Extract location
-        location_elem = element.find(class_=re.compile(r'location|place', re.I))
-        if location_elem:
-            project['location'] = location_elem.get_text(strip=True)
-        
-        # Extract any links within the item
-        links = element.find_all('a', href=True)
-        project_links = []
-        for link in links:
+        # Extract all PDF links
+        pdf_links = []
+        for link in soup.find_all('a', href=True):
             href = link['href']
-            text = link.get_text(strip=True)
-            if href and not href.startswith('#'):
-                project_links.append({
-                    'text': text,
+            if '.pdf' in href.lower():
+                pdf_links.append({
+                    'text': link.get_text(strip=True),
                     'url': self._make_absolute_url(href)
                 })
-        if project_links:
-            project['links'] = project_links
         
-        # Extract all text content as fallback
-        if not project.get('description'):
-            all_text = element.get_text(separator=' ', strip=True)
-            if all_text and len(all_text) > 20:
-                project['full_text'] = all_text[:1000]  # Limit to 1000 chars
+        # If still no projects but we have PDF links, create entries from PDFs
+        if not projects and pdf_links:
+            for pdf in pdf_links:
+                if 'terms' in pdf['text'].lower() or 'tor' in pdf['text'].lower():
+                    projects.append({
+                        'type': 'document',
+                        'title': pdf['text'],
+                        'document_url': pdf['url'],
+                        'extracted_at': datetime.now().isoformat()
+                    })
         
-        project['extracted_at'] = datetime.now().isoformat()
-        
-        return project
-    
-    def _extract_documents(self, soup):
-        """Extract links to downloadable documents."""
-        documents = []
-        doc_extensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx']
-        
-        for link in soup.find_all('a', href=True):
-            href = link['href'].lower()
-            if any(ext in href for ext in doc_extensions):
-                documents.append({
-                    'text': link.get_text(strip=True),
-                    'url': self._make_absolute_url(link['href'])
-                })
-        
-        return documents
+        return projects
     
     def _make_absolute_url(self, url):
         """Convert relative URL to absolute."""
+        if not url:
+            return url
         if url.startswith('http'):
             return url
         elif url.startswith('//'):
@@ -202,27 +226,65 @@ class WWFScraper:
         
         if not html_content:
             print("Failed to fetch the page.")
-            return []
+            return None
+        
+        # Check if we got blocked
+        if 'Not Acceptable' in html_content or len(html_content) < 1000:
+            print("Warning: Page may have blocked the request or returned an error.")
+            print(f"Response length: {len(html_content)} characters")
+            print("Attempting with alternative method...")
+            return self._scrape_with_alternative_method()
         
         print("Parsing page content...")
-        self.projects = self.parse_projects(html_content)
+        self.projects = self.parse_consultancy_projects(html_content)
         
-        # Also extract general page information
         soup = BeautifulSoup(html_content, 'html.parser')
         page_info = {
             'page_title': soup.title.string if soup.title else 'N/A',
             'url': self.BASE_URL,
             'scraped_at': datetime.now().isoformat(),
-            'total_items_found': len(self.projects)
+            'total_projects_found': len(self.projects)
         }
         
-        print(f"Found {len(self.projects)} items")
+        print(f"Found {len(self.projects)} projects")
         
         return {
             'page_info': page_info,
-            'projects': self.projects,
-            'raw_html_preview': html_content[:5000] if html_content else None  # For debugging
+            'projects': self.projects
         }
+    
+    def _scrape_with_alternative_method(self):
+        """Try alternative scraping approach using curl-like request."""
+        import subprocess
+        
+        try:
+            # Use curl as fallback
+            result = subprocess.run([
+                'curl', '-s', '-L',
+                '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                '-H', 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                self.BASE_URL
+            ], capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0 and result.stdout:
+                html_content = result.stdout
+                self.projects = self.parse_consultancy_projects(html_content)
+                
+                soup = BeautifulSoup(html_content, 'html.parser')
+                return {
+                    'page_info': {
+                        'page_title': soup.title.string if soup.title else 'N/A',
+                        'url': self.BASE_URL,
+                        'scraped_at': datetime.now().isoformat(),
+                        'total_projects_found': len(self.projects),
+                        'method': 'curl_fallback'
+                    },
+                    'projects': self.projects
+                }
+        except Exception as e:
+            print(f"Alternative method failed: {e}")
+        
+        return None
     
     def save_to_json(self, data, filename='wwf_consultancy_projects.json'):
         """Save extracted data to JSON file."""
@@ -237,30 +299,45 @@ class WWFScraper:
             print("No projects to save to CSV")
             return
         
-        # Get all unique keys from all projects
-        all_keys = set()
+        # Flatten and prepare data for CSV
+        flat_projects = []
         for project in projects:
-            all_keys.update(project.keys())
+            flat_project = {
+                'project_number': project.get('project_number', ''),
+                'title': project.get('title', ''),
+                'deadline': project.get('deadline', ''),
+                'contact_emails': ', '.join(project.get('contact_emails', [])) if project.get('contact_emails') else '',
+                'document_url': project.get('document_url', ''),
+                'extracted_at': project.get('extracted_at', '')
+            }
+            
+            # Add links if present
+            links = project.get('links', [])
+            if links:
+                tor_links = [l['url'] for l in links if 'term' in l.get('text', '').lower() or 'tor' in l.get('text', '').lower()]
+                app_links = [l['url'] for l in links if 'application' in l.get('text', '').lower() or 'form' in l.get('text', '').lower()]
+                flat_project['terms_of_reference_url'] = tor_links[0] if tor_links else ''
+                flat_project['application_form_url'] = app_links[0] if app_links else ''
+            
+            flat_projects.append(flat_project)
         
-        # Remove complex nested fields for CSV
-        simple_keys = [k for k in all_keys if k not in ['links']]
-        
-        with open(filename, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=sorted(simple_keys))
-            writer.writeheader()
-            for project in projects:
-                # Flatten the project data for CSV
-                row = {k: v for k, v in project.items() if k in simple_keys}
-                writer.writerow(row)
-        
-        print(f"Data saved to {filename}")
+        if flat_projects:
+            fieldnames = ['project_number', 'title', 'deadline', 'contact_emails', 
+                         'terms_of_reference_url', 'application_form_url', 'document_url', 'extracted_at']
+            
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction='ignore')
+                writer.writeheader()
+                writer.writerows(flat_projects)
+            
+            print(f"Data saved to {filename}")
 
 
 def main():
     """Main entry point."""
-    print("=" * 60)
+    print("=" * 70)
     print("WWF Pakistan Consultancy Projects Scraper")
-    print("=" * 60)
+    print("=" * 70)
     
     scraper = WWFScraper()
     data = scraper.scrape()
@@ -271,32 +348,36 @@ def main():
         scraper.save_to_csv(data)
         
         # Print summary
-        print("\n" + "=" * 60)
+        print("\n" + "=" * 70)
         print("EXTRACTION SUMMARY")
-        print("=" * 60)
+        print("=" * 70)
         print(f"Page Title: {data['page_info']['page_title']}")
         print(f"URL: {data['page_info']['url']}")
-        print(f"Total Items Found: {data['page_info']['total_items_found']}")
+        print(f"Total Projects Found: {data['page_info']['total_projects_found']}")
         print(f"Scraped At: {data['page_info']['scraped_at']}")
         
         if data['projects']:
-            print("\n" + "-" * 60)
-            print("EXTRACTED PROJECTS/ITEMS:")
-            print("-" * 60)
-            for i, project in enumerate(data['projects'], 1):
-                print(f"\n[{i}] {project.get('title', 'No Title')}")
-                if project.get('description'):
-                    print(f"    Description: {project['description'][:200]}...")
-                if project.get('date'):
-                    print(f"    Date: {project['date']}")
-                if project.get('deadline'):
-                    print(f"    Deadline: {project['deadline']}")
-                if project.get('link'):
-                    print(f"    Link: {project['link']}")
+            print("\n" + "-" * 70)
+            print("CONSULTANCY PROJECTS:")
+            print("-" * 70)
+            for i, project in enumerate(data['projects'][:20], 1):  # Show first 20
+                num = project.get('project_number', 'N/A')
+                title = project.get('title', 'No Title')[:80]
+                deadline = project.get('deadline', 'N/A')
+                print(f"\n[{num}] {title}")
+                if deadline and deadline != 'N/A':
+                    print(f"     Deadline: {deadline}")
+                if project.get('contact_emails'):
+                    print(f"     Contact: {', '.join(project['contact_emails'])}")
                 if project.get('links'):
-                    print(f"    Associated Links: {len(project['links'])}")
+                    print(f"     Documents: {len(project['links'])} link(s)")
+            
+            if len(data['projects']) > 20:
+                print(f"\n... and {len(data['projects']) - 20} more projects")
+                print("See the JSON/CSV files for complete data.")
     else:
-        print("No data extracted.")
+        print("No data extracted. The website may be blocking automated requests.")
+        print("Try accessing the page manually or using a VPN.")
     
     return data
 
