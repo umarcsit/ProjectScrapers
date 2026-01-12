@@ -1,7 +1,842 @@
 {
   "source_url": "https://www.afdb.org/en/about-us/corporate-procurement",
-  "scraped_at": "2026-01-12T21:08:43.062619",
-  "main_page_info": {},
-  "procurement_opportunities": [],
-  "project_details": []
+  "scraped_at": "2026-01-12T21:22:10.374897",
+  "main_page_info": {
+    "page_title": "Procurement",
+    "page_description": "The Procurement Department has been entrusted with the functional authority and responsibility for the Bank's internal procurement. In carrying out this mandate, it commits to obtaining the right goods, works and services for the stated purpose; at the right time, place and cost; in a manner that balances the overall institutional requirements for economy, efficiency,",
+    "sections": [
+      {
+        "title": "Content",
+        "content": [
+          "The Procurement Department has been entrusted with the functional authority and responsibility for the Bank's internal procurement. In carrying out this mandate, it commits to obtaining the right goods, works and services for the stated purpose; at the right time, place and cost; in a manner that balances the overall institutional requirements for economy, efficiency, transparency, equal opportunity, accountability and the needs of line management for flexibility and responsiveness to the particular operational circumstances."
+        ]
+      },
+      {
+        "title": "Content",
+        "content": [
+          "Stay updated with the latest news and opportunities"
+        ]
+      },
+      {
+        "title": "Content",
+        "content": [
+          "The African Development Bank provides various RSS feeds to help you stay informed about our activities, opportunities, and initiatives. Subscribe to any of our feeds to receive automatic updates when new content is published."
+        ]
+      },
+      {
+        "title": "Content",
+        "content": [
+          "Email alerts|Subscribe to the RSS Feed."
+        ]
+      }
+    ],
+    "links": [
+      {
+        "text": "English",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement"
+      },
+      {
+        "text": "Français",
+        "url": "https://www.afdb.org/fr/about-us/corporate-procurement"
+      },
+      {
+        "text": "Selected Projects",
+        "url": "https://www.afdb.org/en/projects-and-operations/selected-projects"
+      },
+      {
+        "text": "Projects & Operations",
+        "url": "https://www.afdb.org/en/documents/projects-operations"
+      },
+      {
+        "text": "Project-related Procurement",
+        "url": "https://www.afdb.org/en/documents/project-related-procurement"
+      },
+      {
+        "text": "Projects & Operations»",
+        "url": "https://mapafrica.afdb.org/en/"
+      },
+      {
+        "text": "Financial Management",
+        "url": "https://www.afdb.org/en/projects-and-operations/financial-management"
+      },
+      {
+        "text": "Financial Products",
+        "url": "https://www.afdb.org/en/projects-and-operations/financial-products"
+      },
+      {
+        "text": "Procurement",
+        "url": "https://www.afdb.org/en/projects-and-operations/procurement"
+      },
+      {
+        "text": "Project Cycle",
+        "url": "https://www.afdb.org/en/projects-and-operations/project-cycle"
+      },
+      {
+        "text": "MapAfrica",
+        "url": "https://www.afdb.org/en/projects-and-operations/mapafrica"
+      },
+      {
+        "text": "Contract awards",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement/contract-awards"
+      },
+      {
+        "text": "Corporate procurement services contacts",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement/corporate-procurement-services-contacts"
+      },
+      {
+        "text": "Procurement notices",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement/procurement-notices"
+      },
+      {
+        "text": "Vendor kiosk",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement/vendor-kiosk"
+      },
+      {
+        "text": "Mise en place des contrats cadres pour la fourniture des services de branding & impressions",
+        "url": "https://www.afdb.org/en/corporate-procurement/mise-en-place-des-contrats-cadres-pour-la-fourniture-des-services-de-branding-impressions-89872"
+      },
+      {
+        "text": "Acquisition de services de maintenance des équipements techniques du bureau pays de la banque à Libreville – Gabon",
+        "url": "https://www.afdb.org/en/corporate-procurement/acquisition-de-services-de-maintenance-des-equipements-techniques-du-bureau-pays-de-la-banque-libreville-gabon-89298"
+      },
+      {
+        "text": "Provision of Sustainable Vehicule Rental Services for the African Development Bank at the Ethiopian Country Offices",
+        "url": "https://www.afdb.org/en/corporate-procurement/provision-sustainable-vehicule-rental-services-african-development-bank-ethiopian-country-offices-88811"
+      },
+      {
+        "text": "Supply, Installation, Maintenance and Support of Network Security Policy Management Solution for the African Development Bank",
+        "url": "https://www.afdb.org/en/corporate-procurement/supply-installation-maintenance-and-support-network-security-policy-management-solution-african-development-bank-88589"
+      },
+      {
+        "text": "Prestations de services d’entretien des équipements de plomberie de l’immeuble CCIA à Abidjan",
+        "url": "https://www.afdb.org/en/corporate-procurement/prestations-de-services-dentretien-des-equipements-de-plomberie-de-limmeuble-ccia-abidjan-88297"
+      },
+      {
+        "text": "Provision of Support and Maintenance Services for Enterprise Content Management (ECM) Platform for African Development Bank (IBM Content Foundation and related IBM modules)",
+        "url": "https://www.afdb.org/en/corporate-procurement/provision-support-and-maintenance-services-enterprise-content-management-ecm-platform-african-development-bank-ibm-content-foundation-and-related-ibm-modules-88416"
+      },
+      {
+        "text": "Fourniture, livraison, installation, configuration et maintenance d’une solution de radiocommunication pour la Banque africaine de développement à Abidjan (Côte d’Ivoire)",
+        "url": "https://www.afdb.org/en/corporate-procurement/fourniture-livraison-installation-configuration-et-maintenance-dune-solution-de-radiocommunication-pour-la-banque-africaine-de-developpement-abidjan-cote-divoire-88205"
+      },
+      {
+        "text": "Maintenance of Ups, CCTV, Videos Phones, Biometric, Access Control, Fire Extinguishers and Fire Alarm System",
+        "url": "https://www.afdb.org/en/corporate-procurement/maintenance-ups-cctv-videos-phones-biometric-access-control-fire-extinguishers-and-fire-alarm-system-88145"
+      },
+      {
+        "text": "Provision of Internet Back Up Services for the African Development Bank Sierra Leonne Country Office (COSL)",
+        "url": "https://www.afdb.org/en/corporate-procurement/provision-internet-back-services-african-development-bank-sierra-leonne-country-office-cosl-88146"
+      },
+      {
+        "text": "Maintenance of Computers, Printers, Photocopiers, Scanners and Others ICT Equipments at the African Development Bank Sierra Leonne Country Office in Freetown",
+        "url": "https://www.afdb.org/en/corporate-procurement/maintenance-computers-printers-photocopiers-scanners-and-others-ict-equipments-african-development-bank-sierra-leonne-country-office-freetown-88147"
+      },
+      {
+        "text": "Request for Expression of Interest for Supply of Goods, Provision of Services and Works for the Regional Development and Business Delivery Office",
+        "url": "https://www.afdb.org/en/corporate-procurement/request-expression-interest-supply-goods-provision-services-and-works-regional-development-and-business-delivery-office-88016"
+      },
+      {
+        "text": "Procurement Notice Provision of Security and Fire Safety Services for the RDGE",
+        "url": "https://www.afdb.org/en/corporate-procurement/procurement-notice-provision-security-and-fire-safety-services-rdge-87996"
+      },
+      {
+        "text": "Acquisition de services d’agence de ressources humaines pour le Personnel à court terme au Bureau Régional de la Banque en Afrique centrale (RDGC) à Yaoundé - Cameroun",
+        "url": "https://www.afdb.org/en/corporate-procurement/acquisition-de-services-dagence-de-ressources-humaines-pour-le-personnel-court-terme-au-bureau-regional-de-la-banque-en-afrique-centrale-rdgc-yaounde-cameroun-87997"
+      },
+      {
+        "text": "Maintenance des installations et équipements électriques de l’immeuble CCIA, IMA et Immeuble Siège de la Banque à Abidjan",
+        "url": "https://www.afdb.org/en/corporate-procurement/maintenance-des-installations-et-equipements-electriques-de-limmeuble-ccia-ima-et-immeuble-siege-de-la-banque-abidjan-87960"
+      },
+      {
+        "text": "Prestations de services d’entretien de la menuiserie, serrurerie et vitrerie des locaux de la Banque africaine de développement à Abidjan (Côte d'Ivoire)",
+        "url": "https://www.afdb.org/en/corporate-procurement/prestations-de-services-dentretien-de-la-menuiserie-serrurerie-et-vitrerie-des-locaux-de-la-banque-africaine-de-developpement-abidjan-cote-divoire-87944"
+      },
+      {
+        "text": "Request for Proposal for Provision of Internet Based Network Solution",
+        "url": "https://www.afdb.org/en/corporate-procurement/request-proposal-provision-internet-based-network-solution-87917"
+      },
+      {
+        "text": "Request for proposal: Provision of facilities management services for RDGE",
+        "url": "https://www.afdb.org/en/corporate-procurement/request-proposal-provision-facilities-management-services-rdge-87788"
+      },
+      {
+        "text": "Provision of Cleaning and Janitorial Services for the African Development Bank, Sierra Leone Country Office (COSL)",
+        "url": "https://www.afdb.org/en/corporate-procurement/provision-cleaning-and-janitorial-services-african-development-bank-sierra-leone-country-office-cosl-87801"
+      },
+      {
+        "text": "2",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=1"
+      },
+      {
+        "text": "3",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=2"
+      },
+      {
+        "text": "4",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=3"
+      },
+      {
+        "text": "5",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=4"
+      },
+      {
+        "text": "6",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=5"
+      },
+      {
+        "text": "7",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=6"
+      },
+      {
+        "text": "8",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=7"
+      },
+      {
+        "text": "9",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=8"
+      },
+      {
+        "text": "last »",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement?page=40"
+      },
+      {
+        "text": "Corporate Procurement",
+        "url": "https://www.afdb.org/en/about-us/corporate-procurement/procurement-notices/current-solicitations.xml"
+      },
+      {
+        "text": "Projects Procurement",
+        "url": "https://www.afdb.org/en/projects-and-operations/procurement.xml"
+      }
+    ]
+  },
+  "procurement_opportunities": [
+    {
+      "title": "About Us»",
+      "url": "https://www.afdb.org/en/about/mission-and-strategy"
+    },
+    {
+      "title": "History",
+      "url": "https://www.afdb.org/en/about-us/corporate-information/history"
+    },
+    {
+      "title": "History",
+      "url": "https://www.afdb.org/en/about-us/corporate-information/history"
+    },
+    {
+      "title": "Mission & Strategy",
+      "url": "https://www.afdb.org/en/about/mission-and-strategy"
+    },
+    {
+      "title": "Frequently asked questions",
+      "url": "https://www.afdb.org/en/about-us/frequently-asked-questions"
+    },
+    {
+      "title": "Overview",
+      "url": "https://www.afdb.org/en/about/overview"
+    },
+    {
+      "title": "Organisational Structure",
+      "url": "https://www.afdb.org/en/about-us/organisational-structure"
+    },
+    {
+      "title": "Corporate Procurement",
+      "url": "https://www.afdb.org/en/about-us/corporate-procurement"
+    },
+    {
+      "title": "Countries»",
+      "url": "https://www.afdb.org/en/countries"
+    },
+    {
+      "title": "North Africa",
+      "url": "https://www.afdb.org/en/countries/north-africa"
+    },
+    {
+      "title": "North Africa",
+      "url": "https://www.afdb.org/en/countries/north-africa"
+    },
+    {
+      "title": "Algeria",
+      "url": "https://www.afdb.org/en/countries/north-africa/algeria"
+    },
+    {
+      "title": "Mauritania",
+      "url": "https://www.afdb.org/en/countries/north-africa/mauritania"
+    },
+    {
+      "title": "Morocco",
+      "url": "https://www.afdb.org/en/countries/north-africa/morocco"
+    },
+    {
+      "title": "Tunisia",
+      "url": "https://www.afdb.org/en/countries/north-africa/tunisia"
+    },
+    {
+      "title": "West Africa",
+      "url": "https://www.afdb.org/en/countries/west-africa"
+    },
+    {
+      "title": "Burkina Faso",
+      "url": "https://www.afdb.org/en/countries/west-africa/burkina-faso"
+    },
+    {
+      "title": "Cabo Verde",
+      "url": "https://www.afdb.org/en/countries/west-africa/cabo-verde"
+    },
+    {
+      "title": "Côte d’Ivoire",
+      "url": "https://www.afdb.org/en/countries/west-africa/cote-divoire"
+    },
+    {
+      "title": "Gambia",
+      "url": "https://www.afdb.org/en/countries/west-africa/gambia"
+    },
+    {
+      "title": "Guinea",
+      "url": "https://www.afdb.org/en/countries/west-africa/guinea"
+    },
+    {
+      "title": "Guinea-Bissau",
+      "url": "https://www.afdb.org/en/countries/west-africa/guinea-bissau"
+    },
+    {
+      "title": "Liberia",
+      "url": "https://www.afdb.org/en/countries/west-africa/liberia"
+    },
+    {
+      "title": "Nigeria",
+      "url": "https://www.afdb.org/en/countries/west-africa/nigeria"
+    },
+    {
+      "title": "Senegal",
+      "url": "https://www.afdb.org/en/countries/west-africa/senegal"
+    },
+    {
+      "title": "Sierra Leone",
+      "url": "https://www.afdb.org/en/countries/west-africa/sierra-leone"
+    },
+    {
+      "title": "East Africa",
+      "url": "https://www.afdb.org/en/countries/east-africa"
+    },
+    {
+      "title": "Burundi",
+      "url": "https://www.afdb.org/en/countries/east-africa/burundi"
+    },
+    {
+      "title": "Comoros",
+      "url": "https://www.afdb.org/en/countries/east-africa/comoros"
+    },
+    {
+      "title": "Djibouti",
+      "url": "https://www.afdb.org/en/countries/east-africa/djibouti"
+    },
+    {
+      "title": "Eritrea",
+      "url": "https://www.afdb.org/en/countries/east-africa/eritrea"
+    },
+    {
+      "title": "Ethiopia",
+      "url": "https://www.afdb.org/en/countries/east-africa/ethiopia"
+    },
+    {
+      "title": "Rwanda",
+      "url": "https://www.afdb.org/en/countries/east-africa/rwanda"
+    },
+    {
+      "title": "Seychelles",
+      "url": "https://www.afdb.org/en/countries/east-africa/seychelles"
+    },
+    {
+      "title": "Somalia",
+      "url": "https://www.afdb.org/en/countries/east-africa/somalia"
+    },
+    {
+      "title": "South Sudan",
+      "url": "https://www.afdb.org/en/countries/east-africa/south-sudan"
+    },
+    {
+      "title": "Tanzania",
+      "url": "https://www.afdb.org/en/countries/east-africa/tanzania"
+    },
+    {
+      "title": "Uganda",
+      "url": "https://www.afdb.org/en/countries/east-africa/uganda"
+    },
+    {
+      "title": "Central Africa",
+      "url": "https://www.afdb.org/en/countries/central-africa"
+    },
+    {
+      "title": "Cameroon",
+      "url": "https://www.afdb.org/en/countries/central-africa/cameroon"
+    },
+    {
+      "title": "Central African Republic",
+      "url": "https://www.afdb.org/en/countries/central-africa/central-african-republic"
+    },
+    {
+      "title": "Democratic Republic of Congo",
+      "url": "https://www.afdb.org/en/countries/central-africa/democratic-republic-of-congo"
+    },
+    {
+      "title": "Equatorial Guinea",
+      "url": "https://www.afdb.org/en/countries/central-africa/equatorial-guinea"
+    },
+    {
+      "title": "Southern Africa",
+      "url": "https://www.afdb.org/en/countries/southern-africa"
+    },
+    {
+      "title": "Angola",
+      "url": "https://www.afdb.org/en/countries/southern-africa/angola"
+    },
+    {
+      "title": "Botswana",
+      "url": "https://www.afdb.org/en/countries/southern-africa/botswana"
+    },
+    {
+      "title": "Eswatini",
+      "url": "https://www.afdb.org/en/countries/southern-africa/eswatini"
+    },
+    {
+      "title": "Lesotho",
+      "url": "https://www.afdb.org/en/countries/southern-africa/lesotho"
+    },
+    {
+      "title": "Madagascar",
+      "url": "https://www.afdb.org/en/countries/southern-africa/madagascar"
+    },
+    {
+      "title": "Malawi",
+      "url": "https://www.afdb.org/en/countries/southern-africa/malawi"
+    },
+    {
+      "title": "Mauritius",
+      "url": "https://www.afdb.org/en/countries/southern-africa/mauritius"
+    },
+    {
+      "title": "Mozambique",
+      "url": "https://www.afdb.org/en/countries/southern-africa/mozambique"
+    },
+    {
+      "title": "Namibia",
+      "url": "https://www.afdb.org/en/countries/southern-africa/namibia"
+    },
+    {
+      "title": "South Africa",
+      "url": "https://www.afdb.org/en/countries/southern-africa/south-africa"
+    },
+    {
+      "title": "São Tomé & Príncipe",
+      "url": "https://www.afdb.org/en/countries/southern-africa/sao-tome-and-principe"
+    },
+    {
+      "title": "Zambia",
+      "url": "https://www.afdb.org/en/countries/southern-africa/zambia"
+    },
+    {
+      "title": "Zimbabwe",
+      "url": "https://www.afdb.org/en/countries/southern-africa/zimbabwe"
+    },
+    {
+      "title": "Non-Regional",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries"
+    },
+    {
+      "title": "View all»",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries"
+    },
+    {
+      "title": "Argentina",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/argentina"
+    },
+    {
+      "title": "Austria",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/austria"
+    },
+    {
+      "title": "Belgium",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/belgium"
+    },
+    {
+      "title": "Brazil",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/brazil"
+    },
+    {
+      "title": "Canada",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/canada"
+    },
+    {
+      "title": "Denmark",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/denmark"
+    },
+    {
+      "title": "Finland",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/finland"
+    },
+    {
+      "title": "France",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/france"
+    },
+    {
+      "title": "Germany",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/germany"
+    },
+    {
+      "title": "Ireland",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/ireland"
+    },
+    {
+      "title": "Kuwait",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/kuwait"
+    },
+    {
+      "title": "Luxembourg",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/luxembourg"
+    },
+    {
+      "title": "Netherlands",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/netherlands"
+    },
+    {
+      "title": "Norway",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/norway"
+    },
+    {
+      "title": "Portugal",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/portugal"
+    },
+    {
+      "title": "Saudi Arabia",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/saudi-arabia"
+    },
+    {
+      "title": "Sweden",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/sweden"
+    },
+    {
+      "title": "Switzerland",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/switzerland"
+    },
+    {
+      "title": "Türkiye",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/turkiye"
+    },
+    {
+      "title": "United Kingdom",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/united-kingdom"
+    },
+    {
+      "title": "United States of America",
+      "url": "https://www.afdb.org/en/countries/non-regional-member-countries/united-states-of-america"
+    },
+    {
+      "title": "News & Events»",
+      "url": "https://www.afdb.org/en/news-and-events"
+    },
+    {
+      "title": "All news",
+      "url": "https://www.afdb.org/en/news-and-events"
+    },
+    {
+      "title": "All news",
+      "url": "https://www.afdb.org/en/news-and-events"
+    },
+    {
+      "title": "Press Releases",
+      "url": "https://www.afdb.org/en/news-and-events/press-releases"
+    },
+    {
+      "title": "Interviews",
+      "url": "https://www.afdb.org/en/news-and-events/interviews"
+    },
+    {
+      "title": "Events Calendar",
+      "url": "https://www.afdb.org/en/news-and-events/events-calendar"
+    },
+    {
+      "title": "Speeches",
+      "url": "https://www.afdb.org/en/news-and-events/speeches"
+    },
+    {
+      "title": "Selected Projects",
+      "url": "https://www.afdb.org/en/projects-and-operations/selected-projects"
+    },
+    {
+      "title": "Loan & Grants",
+      "url": "https://www.afdb.org/en/news-and-events/loans-grants"
+    },
+    {
+      "title": "Success Stories",
+      "url": "https://www.afdb.org/en/news-events/success-stories"
+    },
+    {
+      "title": "Multimedia",
+      "url": "https://www.afdb.org/en/news-and-events/multimedia"
+    },
+    {
+      "title": "Videos",
+      "url": "https://www.afdb.org/en/news-and-events/multimedia"
+    },
+    {
+      "title": "AfDB TV",
+      "url": "https://www.afdb.org/en/news-events-videos/afdb-tv"
+    },
+    {
+      "title": "Photos",
+      "url": "https://www.afdb.org/en/news-events-videos/photos"
+    },
+    {
+      "title": "Podcasts",
+      "url": "https://www.afdb.org/en/news-events/podcasts"
+    },
+    {
+      "title": "Documents»",
+      "url": "https://www.afdb.org/en/all-documents"
+    },
+    {
+      "title": "Board Documents",
+      "url": "https://www.afdb.org/en/documents/board-documents"
+    },
+    {
+      "title": "Board Documents",
+      "url": "https://www.afdb.org/en/documents/board-documents"
+    },
+    {
+      "title": "Administrative Tribunal",
+      "url": "https://www.afdb.org/en/documents/administrative-tribunal"
+    },
+    {
+      "title": "Financial and Annual Reports",
+      "url": "https://www.afdb.org/en/documents-publications/annual-report"
+    },
+    {
+      "title": "Budget Documents",
+      "url": "https://www.afdb.org/en/documents/budget-documents"
+    },
+    {
+      "title": "Compliance Reviews",
+      "url": "https://www.afdb.org/en/documents/compliance-reviews"
+    },
+    {
+      "title": "Departmental Annual Reports",
+      "url": "https://www.afdb.org/en/documents/departmental-annual-reports"
+    },
+    {
+      "title": "Environmental & Social Assessments",
+      "url": "https://www.afdb.org/en/documents/environmental-social-assessments"
+    },
+    {
+      "title": "Evaluation reports",
+      "url": "https://www.afdb.org/en/documents/evaluation-reports"
+    },
+    {
+      "title": "Legal Documents",
+      "url": "https://www.afdb.org/en/documents/legal-documents"
+    },
+    {
+      "title": "Financial Information",
+      "url": "https://www.afdb.org/en/documents/financial-information"
+    },
+    {
+      "title": "Policy Documents",
+      "url": "https://www.afdb.org/en/documents/policy-documents"
+    },
+    {
+      "title": "Strategy Documents",
+      "url": "https://www.afdb.org/en/documents/strategy-documents"
+    },
+    {
+      "title": "Projects & Operations",
+      "url": "https://www.afdb.org/en/documents/projects-operations"
+    },
+    {
+      "title": "Project-related Procurement",
+      "url": "https://www.afdb.org/en/documents/project-related-procurement"
+    },
+    {
+      "title": "Publications",
+      "url": "https://www.afdb.org/en/documents/publications"
+    },
+    {
+      "title": "Integrity & Anti-Corruption Reports",
+      "url": "https://www.afdb.org/en/documents/integrity-anti-corruption-reports"
+    },
+    {
+      "title": "Topics & Sectors»",
+      "url": "https://www.afdb.org/en/topics-and-sectors"
+    },
+    {
+      "title": "Initiatives & Partnerships",
+      "url": "https://www.afdb.org/en/topics-and-sectors/initiatives-partnerships"
+    },
+    {
+      "title": "Initiatives & Partnerships",
+      "url": "https://www.afdb.org/en/topics-and-sectors/initiatives-partnerships"
+    },
+    {
+      "title": "Sectors",
+      "url": "https://www.afdb.org/en/topics-and-sectors/sectors"
+    },
+    {
+      "title": "Topics",
+      "url": "https://www.afdb.org/en/topics-and-sectors/topics"
+    },
+    {
+      "title": "Projects & Operations»",
+      "url": "https://mapafrica.afdb.org/en/"
+    },
+    {
+      "title": "Financial Management",
+      "url": "https://www.afdb.org/en/projects-and-operations/financial-management"
+    },
+    {
+      "title": "Financial Management",
+      "url": "https://www.afdb.org/en/projects-and-operations/financial-management"
+    },
+    {
+      "title": "Financial Products",
+      "url": "https://www.afdb.org/en/projects-and-operations/financial-products"
+    },
+    {
+      "title": "Procurement",
+      "url": "https://www.afdb.org/en/projects-and-operations/procurement"
+    },
+    {
+      "title": "Project Cycle",
+      "url": "https://www.afdb.org/en/projects-and-operations/project-cycle"
+    },
+    {
+      "title": "Projects & Operations documents",
+      "url": "https://www.afdb.org/en/documents/projects-operations"
+    },
+    {
+      "title": "Selected Projects",
+      "url": "https://www.afdb.org/en/projects-and-operations/selected-projects"
+    },
+    {
+      "title": "Knowledge»",
+      "url": "https://www.afdb.org/en/knowledge"
+    },
+    {
+      "title": "African Development Institute",
+      "url": "https://www.afdb.org/en/african-development-institute"
+    },
+    {
+      "title": "African Development Institute",
+      "url": "https://www.afdb.org/en/african-development-institute"
+    },
+    {
+      "title": "Research",
+      "url": "https://www.afdb.org/en/knowledge/macro-economics-policy-forecasting-and-research"
+    },
+    {
+      "title": "MapAfrica",
+      "url": "https://www.afdb.org/en/projects-and-operations/mapafrica"
+    },
+    {
+      "title": "Statistics",
+      "url": "https://www.afdb.org/en/knowledge/statistics"
+    },
+    {
+      "title": "Africa Information Highway",
+      "url": "https://www.afdb.org/en/knowledge/statistics/africa-information-highway-aih"
+    },
+    {
+      "title": "Publications",
+      "url": "https://www.afdb.org/en/documents/publications"
+    },
+    {
+      "title": "Careers»",
+      "url": "https://www.afdb.org/en/about-us/careers"
+    },
+    {
+      "title": "Current Vacancies",
+      "url": "https://www.afdb.org/en/about-careers/current-vacancies"
+    },
+    {
+      "title": "Current Vacancies",
+      "url": "https://www.afdb.org/en/about-careers/current-vacancies"
+    },
+    {
+      "title": "Consultants",
+      "url": "https://www.afdb.org/en/about-us/careers/current-vacancies/consultants"
+    },
+    {
+      "title": "Employment of short term staff",
+      "url": "https://www.afdb.org/en/about-us/careers/employment-of-short-term-staff"
+    },
+    {
+      "title": "Internship Programme",
+      "url": "https://www.afdb.org/en/careers/internship-programme"
+    },
+    {
+      "title": "Young Professionals Program",
+      "url": "https://www.afdb.org/en/about-us/careers/young-professionals-program-ypp"
+    },
+    {
+      "title": "Contacts»",
+      "url": "https://www.afdb.org/en/general-contacts"
+    },
+    {
+      "title": "Country Office Contacts",
+      "url": "https://www.afdb.org/en/about-us/organisational-structure/complexes/country-regional-programs-policy/country-office-contacts"
+    },
+    {
+      "title": "Country Office Contacts",
+      "url": "https://www.afdb.org/en/about-us/organisational-structure/complexes/country-regional-programs-policy/country-office-contacts"
+    },
+    {
+      "title": "Mise en place des contrats cadres pour la fourniture des services de branding & impressions",
+      "url": "https://www.afdb.org/en/corporate-procurement/mise-en-place-des-contrats-cadres-pour-la-fourniture-des-services-de-branding-impressions-89872",
+      "description": "The Procurement Department has been entrusted with the functional authority and responsibility for the Bank's internal procurement. In carrying out this mandate, it commits to obtaining the right goods, works and services for the stated purpose; at the right time, place and cost; in a manner that balances the overall institutional requirements for economy, efficiency, transparency, equal opportunity, accountability and the needs of line management for flexibility and responsiveness to the particular operational circumstances."
+    },
+    {
+      "title": "Mise en place des contrats cadres pour la fourniture des services de branding & impressions",
+      "url": "https://www.afdb.org/en/corporate-procurement/mise-en-place-des-contrats-cadres-pour-la-fourniture-des-services-de-branding-impressions-89872",
+      "description": "Stay updated with the latest news and opportunities"
+    },
+    {
+      "title": "Mise en place des contrats cadres pour la fourniture des services de branding & impressions",
+      "url": "https://www.afdb.org/en/corporate-procurement/mise-en-place-des-contrats-cadres-pour-la-fourniture-des-services-de-branding-impressions-89872",
+      "description": "Stay updated with the latest news and opportunities"
+    }
+  ],
+  "project_details": [
+    {
+      "url": "https://www.afdb.org/en/projects-and-operations/selected-projects",
+      "title": "www.afdb.org",
+      "description": "Verify you are human by completing the action below.",
+      "details": {},
+      "documents": []
+    },
+    {
+      "url": "https://www.afdb.org/en/documents/projects-operations",
+      "title": "www.afdb.org",
+      "description": "Verify you are human by completing the action below.",
+      "details": {},
+      "documents": []
+    },
+    {
+      "url": "https://www.afdb.org/en/documents/project-related-procurement",
+      "title": "www.afdb.org",
+      "description": "Verify you are human by completing the action below.",
+      "details": {},
+      "documents": []
+    },
+    {
+      "url": "https://www.afdb.org/en/projects-and-operations/financial-management",
+      "title": "www.afdb.org",
+      "description": "Verify you are human by completing the action below.",
+      "details": {},
+      "documents": []
+    },
+    {
+      "url": "https://www.afdb.org/en/projects-and-operations/financial-products",
+      "title": "www.afdb.org",
+      "description": "Verify you are human by completing the action below.",
+      "details": {},
+      "documents": []
+    }
+  ]
 }
