@@ -3,6 +3,7 @@
 GGGI Tender Scraper
 Scrapes tender information from https://in-tendhost.co.uk/gggi/aspx/Tenders/Current
 Uses Selenium to render JavaScript and extract tender data.
+Visits each tender's detail page to extract full description.
 Outputs results to a CSV file.
 """
 
@@ -18,7 +19,6 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import time
 import re
-import json
 from datetime import datetime
 import logging
 
@@ -52,7 +52,6 @@ def setup_driver():
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
     except Exception:
-        # Fallback to system Chrome
         chrome_options.binary_location = "/usr/local/bin/google-chrome"
         driver = webdriver.Chrome(options=chrome_options)
     
@@ -67,30 +66,34 @@ def clean_text(text):
     return text
 
 
-def wait_for_tenders(driver, timeout=20):
+def wait_for_tenders(driver, timeout=30):
     """Wait for tenders to load on the page."""
     try:
-        # Wait for the container to be present
         WebDriverWait(driver, timeout).until(
             EC.presence_of_element_located((By.ID, "containerProjects"))
         )
+        # Wait longer for AJAX content to load
+        time.sleep(5)
         
-        # Wait a bit for AJAX to complete
-        time.sleep(3)
+        # Try multiple times to find tenders
+        for _ in range(3):
+            elements = driver.find_elements(By.CSS_SELECTOR, "[data-timescalesid]")
+            if elements:
+                return True
+            time.sleep(2)
         
-        # Check if tenders are loaded or empty message appears
+        # Check if there's an empty message
         try:
-            WebDriverWait(driver, 10).until(
-                lambda d: len(d.find_elements(By.CSS_SELECTOR, "[data-timescalesid]")) > 0 or
-                          "no " in d.find_element(By.ID, "containerProjects").text.lower()
-            )
-        except TimeoutException:
+            container_text = driver.find_element(By.ID, "containerProjects").text.lower()
+            if "no " in container_text or "there are no" in container_text:
+                return True  # Page loaded but no tenders
+        except:
             pass
         
-        return True
+        return True  # Return true anyway, let extraction handle it
     except TimeoutException:
         logger.warning("Timeout waiting for tenders to load")
-        return False
+        return True  # Try to extract anyway
 
 
 def extract_tenders_from_page(driver, mode):
@@ -98,7 +101,6 @@ def extract_tenders_from_page(driver, mode):
     tenders = []
     
     try:
-        # Find all tender containers
         tender_elements = driver.find_elements(By.CSS_SELECTOR, "[data-timescalesid]")
         logger.info(f"Found {len(tender_elements)} tender elements on page")
         
@@ -106,7 +108,7 @@ def extract_tenders_from_page(driver, mode):
             try:
                 project_id = elem.get_attribute("data-timescalesid")
                 
-                # Extract title from box-header
+                # Extract title
                 title = ""
                 try:
                     header = elem.find_element(By.CSS_SELECTOR, ".box-header .font-14")
@@ -123,22 +125,24 @@ def extract_tenders_from_page(driver, mode):
                 try:
                     deadline_elem = elem.find_element(By.CSS_SELECTOR, ".box-header .text-right")
                     deadline_text = clean_text(deadline_elem.text)
-                    # Extract date from text like "Deadline For Applications : 15 Jan 2026 12:00:00"
                     if ":" in deadline_text:
                         deadline = deadline_text.split(":", 1)[1].strip()
                 except NoSuchElementException:
                     pass
                 
-                # Extract table data
                 tender_data = {
                     'mode': mode,
                     'project_id': project_id,
                     'title': title,
                     'deadline': deadline,
                     'detail_url': f"{PROJECT_DETAIL_URL}/{project_id}" if project_id else '',
+                    'reference': '',
+                    'status': '',
+                    'category': '',
+                    'description': '',  # Will be filled from detail page
                 }
                 
-                # Try to extract table rows
+                # Extract table data from listing
                 try:
                     rows = elem.find_elements(By.CSS_SELECTOR, "table tr")
                     for row in rows:
@@ -156,12 +160,10 @@ def extract_tenders_from_page(driver, mode):
                                     tender_data['category'] = value
                                 elif 'further information' in label:
                                     tender_data['further_information'] = value
-                                elif 'title' in label and not tender_data.get('title'):
-                                    tender_data['title'] = value
                         except Exception:
                             continue
-                except Exception as e:
-                    logger.debug(f"Error extracting table data: {e}")
+                except Exception:
+                    pass
                 
                 tenders.append(tender_data)
                 
@@ -175,8 +177,11 @@ def extract_tenders_from_page(driver, mode):
     return tenders
 
 
-def extract_detail_page(driver, tender_info):
-    """Extract detailed information from a tender's detail page."""
+def extract_description_from_detail_page(driver, tender_info):
+    """
+    Visit tender detail page and extract the full description.
+    This is the main function to scrape description content from each tender's link.
+    """
     details = tender_info.copy()
     
     try:
@@ -184,30 +189,19 @@ def extract_detail_page(driver, tender_info):
         if not detail_url:
             return details
         
+        logger.info(f"  -> Visiting detail page: {detail_url}")
         driver.get(detail_url)
         time.sleep(2)  # Wait for page to load
         
         # Get page source and parse with BeautifulSoup
         soup = BeautifulSoup(driver.page_source, 'lxml')
         
-        # Field mappings
-        field_mappings = {
-            'reference': ['reference', 'ref', 'tender ref', 'project ref'],
-            'title': ['title', 'name', 'tender title', 'project name'],
-            'description': ['description', 'summary', 'overview', 'further information', 'brief description'],
-            'buyer': ['buyer', 'authority', 'organisation', 'organization', 'contracting authority', 'customer'],
-            'value': ['value', 'budget', 'estimated value', 'contract value', 'amount'],
-            'published_date': ['published', 'publication date', 'issue date', 'date published'],
-            'deadline': ['deadline', 'closing', 'submission deadline', 'closing date', 'deadline for applications'],
-            'category': ['category', 'type', 'classification', 'cpv', 'process'],
-            'location': ['location', 'place', 'region', 'country', 'delivery location'],
-            'contact_name': ['contact name', 'contact person'],
-            'contact_email': ['contact email', 'email', 'e-mail'],
-            'status': ['status', 'state', 'tender status'],
-            'procedure': ['procedure', 'procurement type', 'tender type'],
-        }
+        # ============================================
+        # EXTRACT DESCRIPTION FROM DETAIL PAGE
+        # ============================================
+        description = ""
         
-        # Extract from tables
+        # Method 1: Look for "Further Information" or description in tables
         tables = soup.find_all('table')
         for table in tables:
             rows = table.find_all('tr')
@@ -217,11 +211,89 @@ def extract_detail_page(driver, tender_info):
                     label = clean_text(cells[0].get_text()).lower().strip(':').strip()
                     value = clean_text(cells[-1].get_text())
                     
-                    for field_name, patterns in field_mappings.items():
-                        if any(p in label for p in patterns):
-                            if field_name not in details or not details.get(field_name):
-                                details[field_name] = value
-                            break
+                    # Look for description-related fields
+                    if any(keyword in label for keyword in ['further information', 'description', 'summary', 'overview', 'details', 'brief']):
+                        if len(value) > len(description):
+                            description = value
+                    
+                    # Also extract other useful fields
+                    if 'reference' in label and not details.get('reference'):
+                        details['reference'] = value
+                    elif 'status' in label and not details.get('status'):
+                        details['status'] = value
+                    elif 'category' in label or 'process' in label:
+                        if not details.get('category'):
+                            details['category'] = value
+                    elif 'publish' in label or 'issue date' in label:
+                        if not details.get('published_date'):
+                            details['published_date'] = value
+                    elif 'buyer' in label or 'authority' in label or 'organisation' in label:
+                        if not details.get('buyer'):
+                            details['buyer'] = value
+                    elif 'value' in label or 'budget' in label:
+                        if not details.get('value'):
+                            details['value'] = value
+                    elif 'location' in label or 'place' in label:
+                        if not details.get('location'):
+                            details['location'] = value
+                    elif 'contact' in label and 'email' in label:
+                        if not details.get('contact_email'):
+                            details['contact_email'] = value
+                    elif 'contact' in label and 'name' in label:
+                        if not details.get('contact_name'):
+                            details['contact_name'] = value
+        
+        # Method 2: Look for box-body content with description
+        if not description or len(description) < 100:
+            box_bodies = soup.find_all('div', class_=re.compile(r'box-body', re.IGNORECASE))
+            for box in box_bodies:
+                box_text = clean_text(box.get_text())
+                # Skip navigation/menu content
+                if len(box_text) > 200 and not any(skip in box_text.lower() for skip in ['login', 'register', 'menu', 'navigation', 'opt in', 'opt out']):
+                    # Check if this looks like tender description content
+                    if any(keyword in box_text.lower() for keyword in ['project', 'objective', 'scope', 'background', 'invit', 'proposal', 'tender', 'consulting']):
+                        if len(box_text) > len(description):
+                            description = box_text
+        
+        # Method 3: Look for main content area
+        if not description or len(description) < 100:
+            main_content = soup.find('div', id=re.compile(r'content|main', re.IGNORECASE))
+            if main_content:
+                content_text = clean_text(main_content.get_text())
+                if len(content_text) > 200:
+                    description = content_text
+        
+        # Method 4: Find all paragraphs that look like description
+        if not description or len(description) < 100:
+            paragraphs = soup.find_all('p')
+            desc_parts = []
+            for p in paragraphs:
+                p_text = clean_text(p.get_text())
+                if len(p_text) > 50 and any(keyword in p_text.lower() for keyword in ['project', 'objective', 'scope', 'gggi', 'invit', 'proposal']):
+                    desc_parts.append(p_text)
+            if desc_parts:
+                description = ' '.join(desc_parts)
+        
+        # Clean up description - remove common boilerplate text
+        if description:
+            # Remove common footer/boilerplate sections
+            boilerplate_markers = [
+                'HOW TO OBTAIN THE DOCUMENTS',
+                'ONLINE TENDER MANAGEMENT',
+                'OPTING IN & OPTING OUT',
+                'SUBMITTING YOUR RESPONSE',
+                'NOTIFICATION EMAILS',
+                'Please read Instructions on How to submit',
+            ]
+            
+            for marker in boilerplate_markers:
+                if marker in description:
+                    description = description.split(marker)[0]
+            
+            description = clean_text(description)
+        
+        details['description'] = description
+        logger.info(f"  -> Extracted description: {len(description)} characters")
         
         # Extract documents
         doc_links = soup.find_all('a', href=re.compile(r'\.(pdf|doc|docx|xls|xlsx)', re.IGNORECASE))
@@ -258,11 +330,6 @@ def scrape_tenders():
                 driver.get(url)
                 
                 if wait_for_tenders(driver):
-                    # Save HTML for debugging
-                    if mode == "Current":
-                        with open('/workspace/listing_page.html', 'w', encoding='utf-8') as f:
-                            f.write(driver.page_source)
-                    
                     tenders = extract_tenders_from_page(driver, mode)
                     logger.info(f"Extracted {len(tenders)} {mode} tenders")
                     all_tenders.extend(tenders)
@@ -274,24 +341,25 @@ def scrape_tenders():
         
         logger.info(f"\nTotal tenders collected: {len(all_tenders)}")
         
-        # Fetch detail pages
+        # ============================================
+        # VISIT EACH TENDER'S DETAIL PAGE TO EXTRACT DESCRIPTION
+        # ============================================
         if all_tenders:
-            logger.info("\nFetching detail pages for additional information...")
+            logger.info("\n" + "="*60)
+            logger.info("FETCHING DESCRIPTIONS FROM EACH TENDER'S DETAIL PAGE")
+            logger.info("="*60)
+            
             for i, tender in enumerate(all_tenders):
-                logger.info(f"Processing {i + 1}/{len(all_tenders)}: {tender.get('title', tender.get('project_id', 'Unknown'))[:50]}")
+                logger.info(f"\nProcessing {i + 1}/{len(all_tenders)}: {tender.get('title', tender.get('project_id', 'Unknown'))[:60]}")
                 
                 try:
-                    updated_tender = extract_detail_page(driver, tender)
+                    # Visit detail page and extract description
+                    updated_tender = extract_description_from_detail_page(driver, tender)
                     all_tenders[i] = updated_tender
-                    
-                    # Save first detail page for debugging
-                    if i == 0:
-                        with open('/workspace/detail_page_sample.html', 'w', encoding='utf-8') as f:
-                            f.write(driver.page_source)
                 except Exception as e:
                     logger.warning(f"Error fetching detail for tender {i}: {e}")
                 
-                time.sleep(0.5)
+                time.sleep(0.5)  # Be polite to the server
         
     finally:
         driver.quit()
@@ -305,12 +373,25 @@ def save_to_csv(tenders, filename):
         logger.warning("No tender data to save")
         return None
     
-    # Preferred column order
+    # Preferred column order - Description is prominently placed
     preferred_order = [
-        'mode', 'reference', 'title', 'status', 'category', 'description',
-        'further_information', 'deadline', 'buyer', 'value', 'published_date',
-        'location', 'contact_name', 'contact_email', 'procedure', 'documents',
-        'project_id', 'detail_url'
+        'mode', 
+        'reference', 
+        'title', 
+        'status', 
+        'category', 
+        'description',  # Full description from detail page
+        'deadline', 
+        'published_date',
+        'buyer',
+        'value',
+        'location',
+        'contact_name',
+        'contact_email',
+        'documents',
+        'project_id', 
+        'detail_url',
+        'further_information',
     ]
     
     # Collect all keys
@@ -371,15 +452,25 @@ def main():
                 count = len(df[df['mode'] == mode])
                 print(f"  - {mode}: {count}")
         
+        # Show description stats
+        if df is not None and 'description' in df.columns:
+            desc_lengths = df['description'].apply(lambda x: len(str(x)) if x else 0)
+            print(f"\nDescription column stats:")
+            print(f"  - Average length: {desc_lengths.mean():.0f} characters")
+            print(f"  - Min length: {desc_lengths.min()} characters")
+            print(f"  - Max length: {desc_lengths.max()} characters")
+        
         print("=" * 60)
         
-        # Show samples
-        print("\nSample tender data:")
+        # Show samples with description preview
+        print("\nSample tender data with descriptions:")
         for tender in tenders[:3]:
-            print(f"\n- Title: {tender.get('title', 'N/A')[:80]}")
+            print(f"\n- Title: {tender.get('title', 'N/A')[:70]}")
             print(f"  Reference: {tender.get('reference', 'N/A')}")
-            print(f"  Status: {tender.get('status', 'N/A')}")
             print(f"  Deadline: {tender.get('deadline', 'N/A')}")
+            desc = tender.get('description', '')
+            if desc:
+                print(f"  Description: {desc[:200]}...")
             print(f"  URL: {tender.get('detail_url', 'N/A')}")
     else:
         print("\nNo tenders found.")
