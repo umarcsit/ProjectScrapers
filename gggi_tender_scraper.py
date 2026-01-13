@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-GGGI Tender Scraper
+GGGI Tender Scraper - Full Data Extraction
 Scrapes current tenders from https://in-tendhost.co.uk/gggi/aspx/Tenders/Current
-and exports them to a CSV file.
-
-Note: This site requires authentication. You need to provide login credentials.
+Clicks on each tender to extract detailed information.
+Exports all data to CSV.
 """
 
 import csv
 import os
+import re
 import time
 from datetime import datetime
-from dataclasses import dataclass, fields
-from typing import List, Optional
+from dataclasses import dataclass, fields, asdict
+from typing import List, Optional, Dict
+from bs4 import BeautifulSoup
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -20,36 +21,71 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, ElementClickInterceptedException
 from webdriver_manager.chrome import ChromeDriverManager
 
 
 @dataclass
 class Tender:
-    """Represents a tender listing."""
-    title: str
-    reference: Optional[str] = None
-    deadline: Optional[str] = None
-    category: Optional[str] = None
-    status: Optional[str] = None
-    description: Optional[str] = None
-    url: Optional[str] = None
+    """Complete tender information."""
+    # Basic Info from List
+    title: str = ""
+    reference: str = ""
+    process_type: str = ""
+    timezone: str = ""
+    issue_date: str = ""
+    deadline: str = ""
+    
+    # Detail Page Info
+    status: str = ""
+    buyer: str = ""
+    buyer_contact: str = ""
+    buyer_email: str = ""
+    buyer_phone: str = ""
+    category: str = ""
+    cpv_codes: str = ""
+    location: str = ""
+    region: str = ""
+    country: str = ""
+    estimated_value: str = ""
+    currency: str = ""
+    duration: str = ""
+    
+    # Description
+    description: str = ""
+    scope_of_work: str = ""
+    eligibility: str = ""
+    submission_requirements: str = ""
+    evaluation_criteria: str = ""
+    
+    # Documents
+    documents: str = ""
+    attachments: str = ""
+    
+    # URLs
+    detail_url: str = ""
+    project_id: str = ""
+    
+    # Additional
+    additional_info: str = ""
+    questions_deadline: str = ""
+    site_visit: str = ""
 
 
 class GGGITenderScraper:
-    """Scraper for GGGI tenders from in-tendhost.co.uk"""
+    """Full scraper for GGGI tenders with detail page extraction."""
     
     BASE_URL = "https://in-tendhost.co.uk/gggi/aspx/Tenders/Current"
-    LOGIN_URL = "https://in-tendhost.co.uk/gggi"
     
     def __init__(self, email: str = None, password: str = None, headless: bool = True):
         self.email = email or os.environ.get('GGGI_EMAIL')
         self.password = password or os.environ.get('GGGI_PASSWORD')
         self.headless = headless
         self.driver = None
+        self.wait = None
     
     def _setup_driver(self):
-        """Set up Selenium WebDriver with Chrome."""
+        """Set up Selenium WebDriver."""
         chrome_options = Options()
         if self.headless:
             chrome_options.add_argument("--headless=new")
@@ -57,10 +93,11 @@ class GGGITenderScraper:
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
         
         service = Service(ChromeDriverManager().install())
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        self.wait = WebDriverWait(self.driver, 10)
     
     def _close_driver(self):
         """Close the WebDriver."""
@@ -68,261 +105,317 @@ class GGGITenderScraper:
             self.driver.quit()
             self.driver = None
     
-    def login(self) -> bool:
-        """Login to the portal."""
-        if not self.email or not self.password:
-            print("ERROR: Login credentials not provided.")
-            print("Please set GGGI_EMAIL and GGGI_PASSWORD environment variables")
-            print("Or pass email and password to the constructor.")
-            return False
+    def parse_tender_tables(self, soup) -> List[Dict]:
+        """Parse tender info from the table pairs on listing page."""
+        tables = soup.find_all('table')
+        tenders = []
+        
+        i = 0
+        while i < len(tables) - 1:
+            tender_data = {}
+            
+            # Parse basic info table
+            basic_table = tables[i]
+            for row in basic_table.find_all('tr'):
+                cells = row.find_all(['td', 'th'])
+                if len(cells) >= 2:
+                    label = cells[0].get_text(strip=True).lower()
+                    value = cells[-1].get_text(strip=True)
+                    
+                    if 'title' in label:
+                        tender_data['title'] = value
+                    elif 'reference' in label:
+                        tender_data['reference'] = value
+                    elif 'process' in label:
+                        tender_data['process_type'] = value
+            
+            if not tender_data.get('title') and not tender_data.get('reference'):
+                i += 1
+                continue
+            
+            # Parse date info table (next table)
+            if i + 1 < len(tables):
+                date_table = tables[i + 1]
+                for row in date_table.find_all('tr'):
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        label = cells[0].get_text(strip=True).lower()
+                        value = cells[-1].get_text(strip=True)
+                        
+                        if 'timezone' in label:
+                            tender_data['timezone'] = value
+                        elif 'issue' in label:
+                            tender_data['issue_date'] = value
+                        elif 'deadline' in label:
+                            tender_data['deadline'] = value
+            
+            tenders.append(tender_data)
+            i += 2
+        
+        return tenders
+    
+    def get_project_ids(self) -> List[str]:
+        """Extract project IDs from the page buttons."""
+        project_ids = []
+        buttons = self.driver.find_elements(By.CSS_SELECTOR, "button[onclick*='ProjectManage']")
+        
+        for button in buttons:
+            onclick = button.get_attribute('onclick') or ''
+            match = re.search(r'ProjectManage\((\d+)\)', onclick)
+            if match:
+                project_ids.append(match.group(1))
+        
+        return project_ids
+    
+    def click_next_page(self) -> bool:
+        """Click next page button if available."""
+        try:
+            # Look for Next button
+            next_buttons = self.driver.find_elements(By.XPATH, "//button[contains(text(), 'Next')] | //a[contains(text(), 'Next')] | //*[contains(@class, 'next')]")
+            for btn in next_buttons:
+                if btn.is_displayed() and btn.is_enabled():
+                    btn.click()
+                    time.sleep(3)
+                    return True
+        except Exception:
+            pass
+        return False
+    
+    def extract_detail_page(self, project_id: str) -> Dict:
+        """Click on a tender and extract detail page information."""
+        details = {}
         
         try:
-            print(f"Navigating to login page...")
-            self.driver.get(self.LOGIN_URL)
+            # Click the button to open detail page
+            button = self.driver.find_element(By.CSS_SELECTOR, f"button[onclick*='ProjectManage({project_id})']")
+            
+            # Scroll to button
+            self.driver.execute_script("arguments[0].scrollIntoView(true);", button)
+            time.sleep(0.5)
+            
+            # Click
+            try:
+                button.click()
+            except ElementClickInterceptedException:
+                self.driver.execute_script("arguments[0].click();", button)
+            
+            time.sleep(3)
+            
+            # Parse the detail page
+            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+            page_text = self.driver.find_element(By.TAG_NAME, 'body').text
+            
+            # Extract all labeled fields
+            for table in soup.find_all('table'):
+                for row in table.find_all('tr'):
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) >= 2:
+                        label = cells[0].get_text(strip=True).lower()
+                        value = cells[-1].get_text(strip=True)
+                        
+                        if value and value.lower() not in ['n/a', '-', '']:
+                            self._map_detail_field(details, label, value)
+            
+            # Extract from definition lists
+            for dt in soup.find_all('dt'):
+                try:
+                    label = dt.get_text(strip=True).lower()
+                    dd = dt.find_next_sibling('dd')
+                    if dd:
+                        value = dd.get_text(strip=True)
+                        self._map_detail_field(details, label, value)
+                except:
+                    pass
+            
+            # Look for description sections
+            desc_patterns = [
+                (r'description[:\s]*(.+?)(?=\n\n|\Z)', 'description'),
+                (r'scope[:\s]*(.+?)(?=\n\n|\Z)', 'scope_of_work'),
+                (r'eligibility[:\s]*(.+?)(?=\n\n|\Z)', 'eligibility'),
+                (r'submission[:\s]*(.+?)(?=\n\n|\Z)', 'submission_requirements'),
+                (r'evaluation[:\s]*(.+?)(?=\n\n|\Z)', 'evaluation_criteria'),
+            ]
+            
+            for pattern, field in desc_patterns:
+                if not details.get(field):
+                    match = re.search(pattern, page_text, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        details[field] = match.group(1).strip()[:2000]
+            
+            # Extract documents/attachments
+            doc_links = []
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                if any(ext in href.lower() for ext in ['.pdf', '.doc', '.xls', '.zip', 'download', 'attachment', 'document']):
+                    doc_name = link.get_text(strip=True) or 'Document'
+                    doc_links.append(f"{doc_name}")
+            
+            if doc_links:
+                details['documents'] = ' | '.join(doc_links[:20])
+            
+            # Go back to listing
+            self.driver.back()
             time.sleep(2)
             
-            # Find and fill email field
-            email_field = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='email'], input[name='email'], input[id*='email'], input[placeholder*='mail']"))
-            )
-            email_field.clear()
-            email_field.send_keys(self.email)
-            
-            # Find and fill password field
-            password_field = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-            password_field.clear()
-            password_field.send_keys(self.password)
-            
-            # Find and click login button
-            login_btn = self.driver.find_element(By.CSS_SELECTOR, "button[type='submit'], input[type='submit'], button.login, button[class*='login']")
-            login_btn.click()
-            
-            # Wait for login to complete
-            time.sleep(3)
-            
-            # Check if login was successful (look for logout link or dashboard elements)
-            if "login" not in self.driver.current_url.lower() or "dashboard" in self.driver.current_url.lower():
-                print("Login successful!")
-                return True
-            else:
-                print("Login may have failed. Current URL:", self.driver.current_url)
-                return False
-                
         except Exception as e:
-            print(f"Login error: {e}")
-            return False
-    
-    def fetch_tenders_page(self) -> bool:
-        """Navigate to the tenders page."""
-        try:
-            print(f"Loading {self.BASE_URL}...")
-            self.driver.get(self.BASE_URL)
-            time.sleep(3)
-            
-            # Wait for content to load
+            print(f"    Error extracting details for project {project_id}: {e}")
+            # Try to go back anyway
             try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.TAG_NAME, "table"))
-                )
-            except TimeoutException:
+                self.driver.get(self.BASE_URL)
+                time.sleep(3)
+            except:
                 pass
-            
-            return True
-        except Exception as e:
-            print(f"Error loading page: {e}")
-            return False
+        
+        details['project_id'] = project_id
+        return details
     
-    def parse_tenders(self) -> List[Tender]:
-        """Parse tender listings from the loaded page."""
-        tenders = []
+    def _map_detail_field(self, details: Dict, label: str, value: str):
+        """Map a label to the appropriate detail field."""
+        label = label.lower().strip()
         
-        # Get page source for debugging
-        page_text = self.driver.find_element(By.TAG_NAME, "body").text
+        mappings = {
+            'status': ['status', 'state', 'stage'],
+            'buyer': ['buyer', 'contracting authority', 'organization', 'organisation', 'client', 'authority'],
+            'buyer_contact': ['contact', 'contact person', 'contact name', 'officer'],
+            'buyer_email': ['email', 'e-mail'],
+            'buyer_phone': ['phone', 'telephone', 'tel', 'mobile'],
+            'category': ['category', 'type', 'sector', 'classification'],
+            'cpv_codes': ['cpv', 'cpv code'],
+            'location': ['location', 'place', 'delivery location', 'place of delivery', 'address'],
+            'region': ['region', 'area', 'territory', 'district'],
+            'country': ['country', 'nation'],
+            'estimated_value': ['value', 'estimated value', 'contract value', 'budget', 'amount', 'cost'],
+            'currency': ['currency'],
+            'duration': ['duration', 'period', 'contract period', 'length'],
+            'description': ['description', 'summary', 'brief', 'overview'],
+            'scope_of_work': ['scope', 'scope of work', 'terms of reference', 'tor'],
+            'eligibility': ['eligibility', 'qualification', 'requirements'],
+            'questions_deadline': ['questions', 'clarification', 'query deadline'],
+            'site_visit': ['site visit', 'pre-bid'],
+        }
         
-        # Check if we're still on login page
-        if "Log in to your account" in page_text or "forgotten my password" in page_text.lower():
-            print("WARNING: Still on login page. Authentication required.")
-            return []
-        
-        # Try multiple parsing strategies
-        
-        # Strategy 1: Parse tables
-        tables = self.driver.find_elements(By.TAG_NAME, "table")
-        for table in tables:
-            rows = table.find_elements(By.TAG_NAME, "tr")
-            if len(rows) > 1:
-                header_row = rows[0]
-                headers = [th.text.strip().lower() for th in header_row.find_elements(By.TAG_NAME, "th")]
-                if not headers:
-                    headers = [td.text.strip().lower() for td in header_row.find_elements(By.TAG_NAME, "td")]
-                
-                header_map = self._get_header_mapping(headers)
-                
-                for row in rows[1:]:
-                    cells = row.find_elements(By.TAG_NAME, "td")
-                    if cells:
-                        tender = self._parse_table_row(cells, header_map, row)
-                        if tender and tender.title:
-                            tenders.append(tender)
-        
-        # Strategy 2: Look for grid/card items
-        if not tenders:
-            tenders = self._parse_grid_items()
-        
-        # Strategy 3: Look for any tender-related links
-        if not tenders:
-            tenders = self._parse_tender_links()
-        
-        return tenders
-    
-    def _get_header_mapping(self, headers: List[str]) -> dict:
-        """Create a mapping of field names to column indices."""
-        mapping = {}
-        for i, header in enumerate(headers):
-            if any(kw in header for kw in ['title', 'name', 'tender', 'description', 'opportunity']):
-                mapping['title'] = i
-            elif any(kw in header for kw in ['ref', 'number', 'id', 'code']):
-                mapping['reference'] = i
-            elif any(kw in header for kw in ['deadline', 'closing', 'end', 'due']):
-                mapping['deadline'] = i
-            elif any(kw in header for kw in ['category', 'type', 'sector']):
-                mapping['category'] = i
-            elif any(kw in header for kw in ['status', 'state', 'stage']):
-                mapping['status'] = i
-        return mapping
-    
-    def _parse_table_row(self, cells, header_map: dict, row) -> Optional[Tender]:
-        """Parse a table row into a Tender object."""
-        cell_texts = [cell.text.strip() for cell in cells]
-        
-        if not any(cell_texts):
-            return None
-        
-        url = None
-        try:
-            link = row.find_element(By.TAG_NAME, "a")
-            url = link.get_attribute("href")
-        except NoSuchElementException:
-            pass
-        
-        title = None
-        if 'title' in header_map and header_map['title'] < len(cell_texts):
-            title = cell_texts[header_map['title']]
-        
-        if not title:
-            try:
-                link = row.find_element(By.TAG_NAME, "a")
-                title = link.text.strip()
-            except NoSuchElementException:
-                for text in cell_texts:
-                    if text and len(text) > 3:
-                        title = text
-                        break
-        
-        if not title or title.lower() in ['', 'title', 'name', 'description']:
-            return None
-        
-        return Tender(
-            title=title,
-            reference=cell_texts[header_map['reference']] if 'reference' in header_map and header_map['reference'] < len(cell_texts) else None,
-            deadline=cell_texts[header_map['deadline']] if 'deadline' in header_map and header_map['deadline'] < len(cell_texts) else None,
-            category=cell_texts[header_map['category']] if 'category' in header_map and header_map['category'] < len(cell_texts) else None,
-            status=cell_texts[header_map['status']] if 'status' in header_map and header_map['status'] < len(cell_texts) else None,
-            url=url
-        )
-    
-    def _parse_grid_items(self) -> List[Tender]:
-        """Parse grid/card-based layouts."""
-        tenders = []
-        
-        selectors = [
-            "div.tender-item", "div.tender-card", "div.opportunity",
-            "div.listing-item", "div.result-item", "article.tender",
-            "div[class*='tender']", "div[class*='item']"
-        ]
-        
-        for selector in selectors:
-            try:
-                items = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                for item in items:
-                    title = None
-                    url = None
-                    
-                    for tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'a', 'strong']:
-                        try:
-                            elem = item.find_element(By.TAG_NAME, tag)
-                            title = elem.text.strip()
-                            if title:
-                                break
-                        except NoSuchElementException:
-                            continue
-                    
-                    try:
-                        link = item.find_element(By.TAG_NAME, "a")
-                        url = link.get_attribute("href")
-                        if not title:
-                            title = link.text.strip()
-                    except NoSuchElementException:
-                        pass
-                    
-                    if title and len(title) > 3:
-                        tenders.append(Tender(title=title, url=url))
-                
-                if tenders:
-                    break
-            except Exception:
-                continue
-        
-        return tenders
-    
-    def _parse_tender_links(self) -> List[Tender]:
-        """Parse tender-related links from the page."""
-        tenders = []
-        seen = set()
-        
-        links = self.driver.find_elements(By.TAG_NAME, "a")
-        for link in links:
-            try:
-                href = link.get_attribute("href") or ""
-                text = link.text.strip()
-                
-                if not text or len(text) < 5:
-                    continue
-                
-                if text.lower() in ['home', 'login', 'register', 'contact', 'help', 'back', 'next', 'previous', 'search']:
-                    continue
-                
-                if any(kw in href.lower() for kw in ['tender', 'opportunity', 'notice', 'contract', 'procurement']):
-                    if text not in seen:
-                        seen.add(text)
-                        tenders.append(Tender(title=text, url=href))
-            except Exception:
-                continue
-        
-        return tenders
+        for field, keywords in mappings.items():
+            if any(kw in label for kw in keywords):
+                if not details.get(field):
+                    details[field] = value
+                break
     
     def scrape(self) -> List[Tender]:
         """Main scraping method."""
+        tenders = []
+        
         try:
             self._setup_driver()
             
-            # Try to login if credentials are provided
-            if self.email and self.password:
-                if not self.login():
-                    print("Login failed. Trying to access public tenders...")
+            print(f"Loading {self.BASE_URL}...")
+            self.driver.get(self.BASE_URL)
+            time.sleep(8)
             
-            if not self.fetch_tenders_page():
-                return []
+            # Scroll to load content
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(2)
             
-            tenders = self.parse_tenders()
-            print(f"Found {len(tenders)} tenders.")
+            all_tender_data = []
+            all_project_ids = []
+            page_num = 1
+            
+            while True:
+                print(f"\nProcessing page {page_num}...")
+                
+                # Parse current page
+                soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+                page_tenders = self.parse_tender_tables(soup)
+                page_ids = self.get_project_ids()
+                
+                print(f"  Found {len(page_tenders)} tenders, {len(page_ids)} project IDs")
+                
+                # Combine tender data with project IDs
+                for i, tender_data in enumerate(page_tenders):
+                    if i < len(page_ids):
+                        tender_data['project_id'] = page_ids[i]
+                    all_tender_data.append(tender_data)
+                
+                all_project_ids.extend(page_ids)
+                
+                # Try to go to next page
+                if not self.click_next_page():
+                    break
+                page_num += 1
+                if page_num > 10:  # Safety limit
+                    break
+            
+            print(f"\nTotal tenders found: {len(all_tender_data)}")
+            print(f"Total project IDs: {len(all_project_ids)}")
+            
+            # Now extract details for each tender
+            print("\nExtracting detail page information...")
+            
+            for i, tender_data in enumerate(all_tender_data):
+                project_id = tender_data.get('project_id', '')
+                title = tender_data.get('title', tender_data.get('reference', 'Unknown'))[:50]
+                
+                print(f"\n[{i+1}/{len(all_tender_data)}] {title}")
+                
+                if project_id:
+                    # Reload listing page if needed
+                    if 'Tenders/Current' not in self.driver.current_url:
+                        self.driver.get(self.BASE_URL)
+                        time.sleep(5)
+                    
+                    # Extract details
+                    detail_data = self.extract_detail_page(project_id)
+                    
+                    # Merge data
+                    for key, value in detail_data.items():
+                        if value and not tender_data.get(key):
+                            tender_data[key] = value
+                
+                # Create Tender object
+                tender = Tender(
+                    title=tender_data.get('title', ''),
+                    reference=tender_data.get('reference', ''),
+                    process_type=tender_data.get('process_type', ''),
+                    timezone=tender_data.get('timezone', ''),
+                    issue_date=tender_data.get('issue_date', ''),
+                    deadline=tender_data.get('deadline', ''),
+                    status=tender_data.get('status', ''),
+                    buyer=tender_data.get('buyer', ''),
+                    buyer_contact=tender_data.get('buyer_contact', ''),
+                    buyer_email=tender_data.get('buyer_email', ''),
+                    buyer_phone=tender_data.get('buyer_phone', ''),
+                    category=tender_data.get('category', ''),
+                    cpv_codes=tender_data.get('cpv_codes', ''),
+                    location=tender_data.get('location', ''),
+                    region=tender_data.get('region', ''),
+                    country=tender_data.get('country', ''),
+                    estimated_value=tender_data.get('estimated_value', ''),
+                    currency=tender_data.get('currency', ''),
+                    duration=tender_data.get('duration', ''),
+                    description=tender_data.get('description', ''),
+                    scope_of_work=tender_data.get('scope_of_work', ''),
+                    eligibility=tender_data.get('eligibility', ''),
+                    submission_requirements=tender_data.get('submission_requirements', ''),
+                    evaluation_criteria=tender_data.get('evaluation_criteria', ''),
+                    documents=tender_data.get('documents', ''),
+                    attachments=tender_data.get('attachments', ''),
+                    detail_url=tender_data.get('detail_url', ''),
+                    project_id=tender_data.get('project_id', ''),
+                    additional_info=tender_data.get('additional_info', ''),
+                    questions_deadline=tender_data.get('questions_deadline', ''),
+                    site_visit=tender_data.get('site_visit', '')
+                )
+                
+                tenders.append(tender)
             
             return tenders
+            
         finally:
             self._close_driver()
     
     def save_to_csv(self, tenders: List[Tender], filename: str = None) -> str:
-        """Save tenders to a CSV file."""
+        """Save tenders to CSV."""
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"gggi_tenders_{timestamp}.csv"
@@ -334,68 +427,54 @@ class GGGITenderScraper:
             writer.writeheader()
             
             for tender in tenders:
-                row = {
-                    'title': tender.title,
-                    'reference': tender.reference or '',
-                    'deadline': tender.deadline or '',
-                    'category': tender.category or '',
-                    'status': tender.status or '',
-                    'description': tender.description or '',
-                    'url': tender.url or ''
-                }
-                writer.writerow(row)
+                writer.writerow(asdict(tender))
         
-        print(f"Saved {len(tenders)} tenders to {filename}")
+        print(f"\nSaved {len(tenders)} tenders to {filename}")
         return filename
 
 
 def main():
     """Main entry point."""
-    print("="*60)
-    print("GGGI Tender Scraper")
-    print("="*60)
-    print("\nNOTE: This website requires login credentials.")
-    print("Set environment variables GGGI_EMAIL and GGGI_PASSWORD")
-    print("to access the tender listings.\n")
+    print("="*70)
+    print("GGGI Tender Scraper - Full Data Extraction")
+    print("="*70)
     
-    # Check for credentials
-    email = os.environ.get('GGGI_EMAIL')
-    password = os.environ.get('GGGI_PASSWORD')
-    
-    if not email or not password:
-        print("WARNING: No credentials provided.")
-        print("The scraper will attempt to access public content only.\n")
-    
-    scraper = GGGITenderScraper(email=email, password=password, headless=True)
+    scraper = GGGITenderScraper(headless=True)
     tenders = scraper.scrape()
     
     if tenders:
-        print("\nTenders Found:")
-        print("-"*60)
+        print("\n" + "="*70)
+        print("TENDER SUMMARY")
+        print("="*70)
         
         for i, tender in enumerate(tenders, 1):
-            print(f"\n{i}. {tender.title}")
-            if tender.reference:
-                print(f"   Reference: {tender.reference}")
-            if tender.deadline:
-                print(f"   Deadline: {tender.deadline}")
-            if tender.category:
-                print(f"   Category: {tender.category}")
-            if tender.status:
-                print(f"   Status: {tender.status}")
-            if tender.url:
-                print(f"   URL: {tender.url}")
+            print(f"\n{i}. {tender.title[:70]}...")
+            print(f"   Reference: {tender.reference}")
+            print(f"   Process: {tender.process_type}")
+            print(f"   Issue Date: {tender.issue_date}")
+            print(f"   Deadline: {tender.deadline}")
+            if tender.buyer:
+                print(f"   Buyer: {tender.buyer}")
+            if tender.estimated_value:
+                print(f"   Value: {tender.estimated_value}")
+            if tender.description:
+                print(f"   Description: {tender.description[:100]}...")
+            if tender.documents:
+                print(f"   Documents: {tender.documents[:100]}...")
         
         csv_file = scraper.save_to_csv(tenders)
-        print(f"\n{'='*60}")
-        print(f"Results saved to: {csv_file}")
+        
+        print(f"\n{'='*70}")
+        print(f"Results exported to: {csv_file}")
+        print(f"Total tenders: {len(tenders)}")
+        print(f"Total columns: {len(fields(Tender))}")
+        
+        # List all columns
+        print(f"\nColumns in CSV:")
+        for f in fields(Tender):
+            print(f"  - {f.name}")
     else:
         print("\nNo tenders found.")
-        print("\nThis website requires authentication to view tenders.")
-        print("Please provide login credentials:")
-        print("  export GGGI_EMAIL='your-email@example.com'")
-        print("  export GGGI_PASSWORD='your-password'")
-        print("\nThen run the scraper again.")
 
 
 if __name__ == "__main__":

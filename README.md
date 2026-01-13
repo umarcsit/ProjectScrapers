@@ -6,6 +6,13 @@ A collection of web scrapers for extracting tender/procurement information.
 
 Scrapes current tenders from the Global Green Growth Institute (GGGI) portal at [in-tendhost.co.uk](https://in-tendhost.co.uk/gggi/aspx/Tenders/Current).
 
+### Features
+
+- Extracts all tenders from the listing page
+- **Visits each tender's detail page** to extract comprehensive information
+- Exports data to CSV with **31 columns** of information
+- Handles JavaScript-rendered content with Selenium
+
 ### Prerequisites
 
 - Python 3.8+
@@ -19,83 +26,85 @@ pip install -r requirements.txt
 
 ### Usage
 
-**Note:** The GGGI tender portal requires authentication. You'll need valid login credentials.
-
-1. Set your credentials as environment variables:
-
-```bash
-export GGGI_EMAIL='your-email@example.com'
-export GGGI_PASSWORD='your-password'
-```
-
-2. Run the scraper:
-
 ```bash
 python3 gggi_tender_scraper.py
 ```
 
-3. The scraper will:
-   - Login to the portal
-   - Navigate to the current tenders page
-   - Extract tender information
-   - Save results to a CSV file (e.g., `gggi_tenders_20240115_120000.csv`)
+### Output Columns
 
-### Output
+The scraper extracts the following information for each tender:
 
-The scraper exports tender data to a CSV file with the following columns:
-
-| Column | Description |
-|--------|-------------|
-| title | Tender title/name |
-| reference | Reference number |
-| deadline | Submission deadline |
-| category | Tender category/type |
-| status | Current status |
-| description | Brief description |
-| url | Link to tender details |
+| Category | Fields |
+|----------|--------|
+| **Basic Info** | title, reference, process_type, project_id |
+| **Dates** | timezone, issue_date, deadline, questions_deadline |
+| **Organization** | buyer, buyer_contact, buyer_email, buyer_phone |
+| **Classification** | status, category, cpv_codes |
+| **Location** | location, region, country |
+| **Financial** | estimated_value, currency, duration |
+| **Details** | description, scope_of_work, eligibility, submission_requirements, evaluation_criteria |
+| **Documents** | documents, attachments |
+| **Other** | detail_url, site_visit, additional_info |
 
 ### Example Output
 
 ```
-============================================================
-GGGI Tender Scraper
-============================================================
+======================================================================
+GGGI Tender Scraper - Full Data Extraction
+======================================================================
 Loading https://in-tendhost.co.uk/gggi/aspx/Tenders/Current...
-Found 5 tenders.
 
-Tenders Found:
-------------------------------------------------------------
+Processing page 1...
+  Found 10 tenders, 10 project IDs
 
-1. Consultancy for Climate Finance Project
-   Reference: GGGI-2024-001
-   Deadline: 2024-02-15
-   URL: https://in-tendhost.co.uk/gggi/...
+Extracting detail page information...
 
-Saved 5 tenders to gggi_tenders_20240115_120000.csv
+[1/10] Capacity Development to Strengthen Electric Vehicle Testing in Nepal
+[2/10] Capacity Enhancement in Estimation and Valuation...
+...
+
+Saved 10 tenders to gggi_tenders_20260113_082559.csv
+
+Total tenders: 10
+Total columns: 31
+```
+
+### Sample CSV Data
+
+```csv
+title,reference,process_type,timezone,issue_date,deadline,description,...
+"Capacity Development...",1000NP-04,RFP,(UTC +09:00) Korea Standard Time,19 Dec 2025,22 Jan 2026,"GGGI Nepal Country Office is inviting...",...
 ```
 
 ### Programmatic Usage
 
 ```python
-from gggi_tender_scraper import GGGITenderScraper
+from gggi_tender_scraper import GGGITenderScraper, Tender
 
-# Initialize with credentials
-scraper = GGGITenderScraper(
-    email='your-email@example.com',
-    password='your-password',
-    headless=True  # Set to False to see browser
-)
+# Initialize scraper
+scraper = GGGITenderScraper(headless=True)
 
-# Scrape tenders
+# Scrape all tenders with details
 tenders = scraper.scrape()
 
 # Save to CSV
 scraper.save_to_csv(tenders, 'output.csv')
 
-# Or process programmatically
+# Process programmatically
 for tender in tenders:
-    print(f"{tender.title} - Deadline: {tender.deadline}")
+    print(f"Title: {tender.title}")
+    print(f"Reference: {tender.reference}")
+    print(f"Deadline: {tender.deadline}")
+    print(f"Description: {tender.description[:200]}...")
+    print("---")
 ```
+
+### Dependencies
+
+- `selenium` - Browser automation
+- `webdriver-manager` - Chrome driver management
+- `beautifulsoup4` - HTML parsing
+- `requests` - HTTP requests
 
 ## License
 
