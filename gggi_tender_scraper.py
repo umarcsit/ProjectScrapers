@@ -219,7 +219,8 @@ def extract_tenders_from_page(driver):
 
 def visit_detail_page_and_extract_description(driver, tender):
     """
-    Visit the tender's View Details page and extract the full description.
+    Visit the tender's View Details page and extract the COMPLETE description.
+    No truncation - gets all text from the Further Information field.
     """
     detail_url = tender.get('detail_url')
     if not detail_url:
@@ -236,7 +237,7 @@ def visit_detail_page_and_extract_description(driver, tender):
         
         description = ""
         
-        # Method 1: Find "Further Information" field in tables
+        # Method 1: Find "Further Information" field in tables - GET COMPLETE TEXT
         tables = soup.find_all('table')
         for table in tables:
             rows = table.find_all('tr')
@@ -247,69 +248,60 @@ def visit_detail_page_and_extract_description(driver, tender):
                     value_cell = cells[-1]
                     
                     label = clean_text(label_cell.get_text()).lower().strip(':').strip()
-                    value = clean_text(value_cell.get_text())
                     
-                    # Extract description from "Further Information" or similar
+                    # For description fields, get the COMPLETE raw text without cleaning
                     if any(kw in label for kw in ['further information', 'description', 'summary', 'overview', 'details']):
-                        if len(value) > len(description):
-                            description = value
-                    
-                    # Also extract other fields
-                    if 'reference' in label and not tender.get('reference'):
-                        tender['reference'] = value
-                    elif 'status' in label and not tender.get('status'):
-                        tender['status'] = value
-                    elif ('category' in label or 'process' in label) and not tender.get('category'):
-                        tender['category'] = value
-                    elif ('publish' in label or 'issue date' in label) and not tender.get('published_date'):
-                        tender['published_date'] = value
-                    elif ('buyer' in label or 'organisation' in label) and not tender.get('buyer'):
-                        tender['buyer'] = value
-                    elif 'value' in label and not tender.get('value'):
-                        tender['value'] = value
-                    elif 'location' in label and not tender.get('location'):
-                        tender['location'] = value
+                        # Get ALL text content - no truncation
+                        raw_text = value_cell.get_text(separator=' ', strip=True)
+                        # Only clean whitespace, keep all content
+                        full_value = re.sub(r'\s+', ' ', raw_text).strip()
+                        if len(full_value) > len(description):
+                            description = full_value
+                    else:
+                        value = clean_text(value_cell.get_text())
+                        # Extract other fields
+                        if 'reference' in label and not tender.get('reference'):
+                            tender['reference'] = value
+                        elif 'status' in label and not tender.get('status'):
+                            tender['status'] = value
+                        elif ('category' in label or 'process' in label) and not tender.get('category'):
+                            tender['category'] = value
+                        elif ('publish' in label or 'issue date' in label) and not tender.get('published_date'):
+                            tender['published_date'] = value
+                        elif ('buyer' in label or 'organisation' in label) and not tender.get('buyer'):
+                            tender['buyer'] = value
+                        elif 'value' in label and not tender.get('value'):
+                            tender['value'] = value
+                        elif 'location' in label and not tender.get('location'):
+                            tender['location'] = value
         
-        # Method 2: Look for description in box-body divs
+        # Method 2: Look for description in box-body tender divs - GET COMPLETE TEXT
         if not description or len(description) < 100:
             box_bodies = soup.find_all('div', class_='box-body')
             for box in box_bodies:
-                # Look for tender class
                 if 'tender' in box.get('class', []):
-                    box_text = clean_text(box.get_text())
-                    if len(box_text) > 200:
-                        # Check if it contains project-related keywords
-                        if any(kw in box_text.lower() for kw in ['project', 'objective', 'scope', 'background', 'gggi', 'invit']):
-                            if len(box_text) > len(description):
-                                description = box_text
+                    # Get ALL text - no truncation
+                    raw_text = box.get_text(separator=' ', strip=True)
+                    full_text = re.sub(r'\s+', ' ', raw_text).strip()
+                    if len(full_text) > 200:
+                        if any(kw in full_text.lower() for kw in ['project', 'objective', 'scope', 'background', 'gggi', 'invit']):
+                            if len(full_text) > len(description):
+                                description = full_text
         
-        # Method 3: Find main content with project details
+        # Method 3: Find main tender content area - GET COMPLETE TEXT
         if not description or len(description) < 100:
-            # Look for the main tender details section
             tender_divs = soup.find_all('div', class_='tender')
             for div in tender_divs:
-                div_text = clean_text(div.get_text())
-                if len(div_text) > 200 and any(kw in div_text.lower() for kw in ['project', 'objective', 'consulting', 'scope']):
-                    if len(div_text) > len(description):
-                        description = div_text
+                raw_text = div.get_text(separator=' ', strip=True)
+                full_text = re.sub(r'\s+', ' ', raw_text).strip()
+                if len(full_text) > 200 and any(kw in full_text.lower() for kw in ['project', 'objective', 'consulting', 'scope']):
+                    if len(full_text) > len(description):
+                        description = full_text
         
-        # Clean up description - remove boilerplate
-        if description:
-            boilerplate = [
-                'HOW TO OBTAIN THE DOCUMENTS',
-                'ONLINE TENDER MANAGEMENT',
-                'OPTING IN & OPTING OUT',
-                'SUBMITTING YOUR RESPONSE',
-                'NOTIFICATION EMAILS',
-                'Please read Instructions',
-            ]
-            for marker in boilerplate:
-                if marker in description:
-                    description = description.split(marker)[0]
-            description = clean_text(description)
-        
+        # Store COMPLETE description - NO TRUNCATION, NO BOILERPLATE REMOVAL
+        # Keep everything as it appears on the page
         tender['description'] = description
-        logger.info(f"  -> Extracted description: {len(description)} characters")
+        logger.info(f"  -> Extracted COMPLETE description: {len(description)} characters")
         
         # Extract document links
         doc_links = soup.find_all('a', href=re.compile(r'\.(pdf|doc|docx|xls|xlsx)', re.IGNORECASE))
