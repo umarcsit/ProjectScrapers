@@ -321,13 +321,14 @@ class FCDOPakistanScraper:
             'Project_URL': f"{self.DEVTRACKER_BASE_URL}/projects/{quote(project.get('iati_identifier', ''), safe='')}/summary"
         }
     
-    def scrape_all(self, scrape_details=True, max_workers=10):
+    def scrape_all(self, scrape_details=True, max_workers=10, limit=None):
         """
         Main method to scrape all Pakistan projects.
         
         Args:
             scrape_details: If True, also scrape detail pages for each project.
             max_workers: Number of parallel workers for detail page scraping.
+            limit: Maximum number of projects to scrape. If None, scrape all.
             
         Returns:
             pandas DataFrame with all project data.
@@ -338,6 +339,11 @@ class FCDOPakistanScraper:
         if not projects:
             print("No projects found!")
             return pd.DataFrame()
+        
+        # Apply limit if specified
+        if limit and limit < len(projects):
+            print(f"Limiting to first {limit} projects...")
+            projects = projects[:limit]
         
         total = len(projects)
         print(f"\nProcessing {total} projects...")
@@ -387,10 +393,12 @@ def main():
     print()
     
     # Initialize scraper with both active and closed projects
-    scraper = FCDOPakistanScraper(include_closed=True, page_size=100)
+    # Limit to first 50 projects
+    scraper = FCDOPakistanScraper(include_closed=True, page_size=50)
     
-    # Scrape all projects (including detail pages with parallel processing)
-    df = scraper.scrape_all(scrape_details=True, max_workers=15)
+    # Scrape projects (including detail pages with parallel processing)
+    # Limit to 50 projects
+    df = scraper.scrape_all(scrape_details=True, max_workers=15, limit=50)
     
     # Save to CSV
     if not df.empty:
