@@ -79,7 +79,6 @@ def extract_additional_info_from_detail_page(detail_url):
     - Attached files
     """
     additional_info = {
-        'views': '',
         'category': '',
         'type': '',
         'positions': '',
@@ -91,14 +90,6 @@ def extract_additional_info_from_detail_page(detail_url):
         response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Extract view count
-        views_span = soup.find('span', class_='text-muted pull-right')
-        if views_span:
-            views_text = views_span.get_text(strip=True)
-            views_match = re.search(r'(\d+)', views_text)
-            if views_match:
-                additional_info['views'] = views_match.group(1)
         
         # Extract info from table
         info_table = soup.find('table', class_='info-table-detail')
@@ -199,9 +190,6 @@ def scrape_listing_page(page_url):
             date_posted = item.find('span', property='datePosted')
             tender['date_posted'] = clean_text(date_posted.get_text()) if date_posted else ''
             
-            # Extract short description from listing
-            short_desc = item.find('span', property='description')
-            tender['short_description'] = clean_text(short_desc.get_text()) if short_desc else ''
             
             # Extract category/employment type
             employment_type = item.find('span', property='employmentType')
@@ -289,7 +277,6 @@ def enrich_with_detail_pages(tenders):
             
             # Get additional info
             additional_info = extract_additional_info_from_detail_page(tender['detail_url'])
-            tender['views'] = additional_info.get('views', '')
             tender['type'] = additional_info.get('type', '')
             tender['positions'] = additional_info.get('positions', '')
             tender['attached_files'] = additional_info.get('attached_files', '')
@@ -299,7 +286,6 @@ def enrich_with_detail_pages(tenders):
                 tender['category'] = additional_info['category']
         else:
             tender['description'] = ''
-            tender['views'] = ''
             tender['type'] = ''
             tender['positions'] = ''
             tender['attached_files'] = ''
@@ -330,8 +316,6 @@ def save_to_csv(tenders, output_file):
         'category',
         'type',
         'positions',
-        'views',
-        'short_description',
         'description',
         'attached_files',
         'employment_type'
