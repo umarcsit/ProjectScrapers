@@ -1,128 +1,91 @@
 # ProjectScrapers - Pakistan Tender Scraper
 
-A Python-based web scraper for extracting tender information from Pakistan's Public Procurement Regulatory Authority (PPRA) and other tender sources.
+A Python web scraper for extracting tender information from PPRA (Public Procurement Regulatory Authority) Pakistan.
 
-## Features
+## 📊 Scraping Results
 
-- **Multi-source scraping**: Attempts to scrape from PPRA API, website, with fallback to sample data
-- **Comprehensive data extraction**: Extracts all available tender fields
-- **Detail page scraping**: Visits each tender's detail page to get full descriptions
-- **Pagination support**: Handles multiple pages of results
-- **Configurable limits**: Set maximum records to scrape via `MAX_RECORDS` variable
-- **CSV export**: Generates well-formatted CSV with all tender information
+**Website:** https://ppra.gov.pk/#/tenders/NoticeTenders
 
-## Target Websites
+| Metric | Value |
+|--------|-------|
+| **Total Records Available** | ~10 (Notice Tenders section) |
+| **Records Scraped** | 10 |
+| **Output File** | `tenders_data.csv` |
+| **Columns** | 10 |
 
-The scraper attempts to access:
-1. **PPRA Pakistan**: https://ppra.gov.pk/#/tenders/NoticeTenders
-2. **Tender Service Pakistan**: https://tenderservicepakistan.com/
-3. **PaperPK**: http://www.paperpk.com/
+> **Note:** The "Notice Tenders" section shows recent/active tender notices. The number varies as new tenders are published and old ones expire.
 
-> **Note**: Due to anti-bot protection (Cloudflare, CAPTCHA), live scraping may be blocked. In such cases, the scraper generates realistic sample data for demonstration.
+## 🎛️ Configuration
 
-## Installation
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-```
-
-## Requirements
-
-- Python 3.8+
-- requests
-- beautifulsoup4
-- pandas
-- lxml
-- selenium (for advanced scraping)
-- undetected-chromedriver (for bypassing bot detection)
-
-## Usage
-
-```bash
-# Run the scraper
-python3 tender_scraper.py
-```
-
-### Configuration
-
-Edit the following variables in `tender_scraper.py`:
+Edit `tender_scraper.py` to adjust:
 
 ```python
-MAX_RECORDS = 100  # Maximum records to scrape (None for all)
+MAX_RECORDS = 50  # Maximum records to scrape. Set to None for ALL records.
 OUTPUT_CSV = "tenders_data.csv"  # Output filename
 ```
 
-## Output Format
-
-The scraper generates a CSV file with the following columns:
+## 📋 CSV Output Columns
 
 | Column | Description |
 |--------|-------------|
 | SR_No | Serial number |
-| Tender_ID | Unique tender identifier |
-| Organization | Procuring entity name |
+| Tender_No | Unique tender ID (e.g., TS847223E) |
+| Organization | Procuring entity with location |
 | Title | Tender title/subject |
-| Category | Tender category (Civil Works, IT Equipment, etc.) |
-| Estimated_Cost | Estimated contract value |
-| Published_Date | Advertisement/publication date |
+| **Description** | Detailed tender description |
+| Downloads | Available downloads |
+| Advertisement_Date | Publication date |
 | Closing_Date | Bid submission deadline |
-| Closing_Time | Submission time |
-| Status | Tender status (Open, Active, Closing Soon, etc.) |
-| Procurement_Method | Single/Two Stage procurement method |
-| Bid_Security | Required bid security percentage |
-| Location | Project location |
-| Contact_Person | Procurement officer contact |
-| Description | Detailed tender description |
-| Detail_URL | Link to tender detail page |
-| Source | Data source indicator |
-| Scrape_Date | Timestamp of data extraction |
+| Page | Page number scraped from |
+| Scrape_Date | Timestamp of extraction |
 
-## Sample Output
+## 🚀 Usage
 
-```
-Total Records: 100
-Total Columns: 18
-Output File: tenders_data.csv
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run scraper
+python3 tender_scraper.py
 ```
 
-## How It Works
+## 📦 Requirements
 
-1. **API Check**: First attempts to access PPRA API endpoints
-2. **Web Scraping**: Falls back to HTML scraping if API unavailable
-3. **Sample Data**: Generates realistic sample data if live scraping is blocked
-4. **CSV Export**: Saves all data with proper encoding (UTF-8 with BOM)
+- Python 3.8+
+- undetected-chromedriver
+- selenium
+- pandas
+- Google Chrome browser
 
-## Anti-Bot Protection
+## 📄 Sample Output
 
-Many tender websites use Cloudflare or similar protection. The scraper includes:
-- Proper User-Agent headers
-- Session management
-- Retry logic
-- Fallback to sample data generation
+```
+SR_No,Tender_No,Organization,Title,Description,Advertisement_Date,Closing_Date
+1,TS847223E,"Sui Northern Gas Pipelines Limited,Lahore",Supply of 12 Dia..,Supply of 12 Dia..,"Jan 13, 2026","Jan 29, 2026"
+2,TS847222E,"State Bank of Pakistan,Karachi central",Supply of Sweet Water...,Supply of Sweet Water...,"Jan 13, 2026","Feb 12, 2026"
+```
 
-## Files
+## 🔧 How It Works
+
+1. **Browser Automation**: Uses undetected-chromedriver to bypass bot detection
+2. **Data Extraction**: Parses HTML tables to extract tender information
+3. **Pagination**: Handles multiple pages automatically
+4. **CSV Export**: Saves data with UTF-8 encoding
+
+## ⚠️ Notes
+
+- The PPRA "Notice Tenders" section displays recent active notices
+- Total records vary based on current tender activity
+- `MAX_RECORDS` variable controls scraping limit
+- Scraper respects website structure and doesn't overload servers
+
+## 📁 Files
 
 - `tender_scraper.py` - Main scraper script
 - `requirements.txt` - Python dependencies
-- `tenders_data.csv` - Output CSV file with tender data
-- `README.md` - This documentation
+- `tenders_data.csv` - Scraped tender data
+- `README.md` - Documentation
 
-## Scraping Statistics
+## 📜 License
 
-Last run:
-- **Records Available**: 100+
-- **Records Scraped**: 100
-- **Columns Generated**: 18
-
-## Legal Disclaimer
-
-This scraper is for educational and research purposes only. Always check the website's terms of service and robots.txt before scraping. Respect rate limits and avoid excessive requests.
-
-## Author
-
-Automated Scraper for Pakistan Tender Data
-
-## License
-
-MIT License
+MIT License - For educational and research purposes.
