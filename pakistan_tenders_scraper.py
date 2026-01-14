@@ -358,7 +358,10 @@ def save_to_csv(tenders, filename=OUTPUT_CSV):
     ]
     
     # Columns to exclude from output
-    columns_to_remove = ['Document_Ref_No', 'Purchaser_Name', 'Purchaser_Address', 'Summary']
+    columns_to_remove = [
+        'Document_Ref_No', 'Purchaser_Name', 'Purchaser_Address', 'Summary',
+        'Detail_Scraped', 'Country_Detail', 'Deadline_Detail', 'TOT_Reference_Detail'
+    ]
     for col in columns_to_remove:
         if col in df.columns:
             df = df.drop(columns=[col])
