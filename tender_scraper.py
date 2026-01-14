@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
-Pakistan Tender Scraper - PPRA Notice Tenders
-Scrapes tender information from PPRA (Public Procurement Regulatory Authority) Pakistan
-Website: https://ppra.gov.pk/#/tenders/NoticeTenders
+PPRA Pakistan - COMPREHENSIVE Tender Scraper
+Scrapes ALL tender sections from PPRA website
 
-Features:
-- Extracts tender listings with all available fields
-- Handles pagination
-- Configurable MAX_RECORDS variable
-- Exports to CSV with all columns
+Sections:
+- Active Tenders
+- Notice Tenders  
+- Pre-Qualifications (PQ)
+- Request for Proposal (RFP)
+- Expression of Interest (EOI)
+- Sales/Auction/Disposal (SAD)
+- Works, Goods, Services categories
+- Tenders History
 """
 
 import time
@@ -21,25 +24,39 @@ from selenium.webdriver.support import expected_conditions as EC
 import pandas as pd
 
 # ============================================================
-# CONFIGURATION - Adjust MAX_RECORDS as needed
+# CONFIGURATION
 # ============================================================
-BASE_URL = "https://ppra.gov.pk/#/tenders/NoticeTenders"
-MAX_RECORDS = 50  # Maximum records to scrape. Set to None for ALL.
+MAX_RECORDS = 500  # Maximum total records to scrape (None for ALL)
+MAX_PER_SECTION = 100  # Max records per section
 OUTPUT_CSV = "tenders_data.csv"
 # ============================================================
 
+# All PPRA tender sections to scrape
+TENDER_SECTIONS = [
+    ("Active Tenders", "https://ppra.gov.pk/#/tenders/activetenders"),
+    ("Tenders History", "https://ppra.gov.pk/#/tenders/tendershistory"),
+    ("Notice Tenders", "https://ppra.gov.pk/#/tenders/NoticeTenders"),
+    ("Pre-Qualifications", "https://ppra.gov.pk/#/tenders/PQTenders"),
+    ("Request for Proposal", "https://ppra.gov.pk/#/tenders/RFPTenders"),
+    ("Expression of Interest", "https://ppra.gov.pk/#/tenders/EOITenders"),
+    ("Sales/Auction/Disposal", "https://ppra.gov.pk/#/tenders/SADTenders"),
+    ("Works", "https://ppra.gov.pk/#/tenders/type/Works"),
+    ("Goods", "https://ppra.gov.pk/#/tenders/type/Goods"),
+    ("Services", "https://ppra.gov.pk/#/tenders/type/Services"),
+]
 
-class PPRATenderScraper:
-    """PPRA Tender Scraper"""
+
+class PPRAComprehensiveScraper:
+    """Comprehensive PPRA Tender Scraper - All Sections"""
     
     def __init__(self, headless=True):
         self.headless = headless
         self.driver = None
-        self.tenders = []
-        self.total_records = 0
+        self.all_tenders = []
+        self.section_counts = {}
+        self.total_available = 0
         
     def setup_driver(self):
-        """Initialize Chrome WebDriver"""
         print("Initializing browser...")
         options = uc.ChromeOptions()
         if self.headless:
@@ -54,7 +71,6 @@ class PPRATenderScraper:
         print("✓ Browser ready")
         
     def close_driver(self):
-        """Close browser"""
         if self.driver:
             try:
                 self.driver.quit()
@@ -62,24 +78,25 @@ class PPRATenderScraper:
                 pass
             print("✓ Browser closed")
             
-    def wait_for_data(self, timeout=30):
-        """Wait for table data"""
+    def wait_for_data(self, timeout=20):
+        """Wait for table data to load"""
         for i in range(timeout):
             try:
                 rows = self.driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
                 for row in rows:
                     cells = row.find_elements(By.TAG_NAME, "td")
-                    if cells and cells[0].text.strip().isdigit():
-                        return True
+                    if cells and len(cells) >= 2:
+                        text = cells[0].text.strip()
+                        if text and (text.isdigit() or text.startswith('TS')):
+                            return True
             except:
                 pass
             time.sleep(1)
         return False
         
-    def get_total_pages(self):
-        """Get total number of pages"""
+    def get_page_count(self):
+        """Get number of pages available"""
         try:
-            # Look for page numbers
             page_links = self.driver.find_elements(By.CSS_SELECTOR, ".pagination .page-link")
             page_nums = []
             for link in page_links:
@@ -92,8 +109,28 @@ class PPRATenderScraper:
             pass
         return 1
         
-    def extract_tenders(self):
-        """Extract tender rows from current page"""
+    def get_total_from_page(self):
+        """Try to extract total count from page"""
+        try:
+            page_source = self.driver.page_source
+            patterns = [
+                r'of\s+([\d,]+)\s+entries',
+                r'Total[:\s]+([\d,]+)',
+                r'([\d,]+)\s+records?',
+                r'([\d,]+)\s+results?'
+            ]
+            for pattern in patterns:
+                matches = re.findall(pattern, page_source, re.IGNORECASE)
+                for m in matches:
+                    num = int(m.replace(',', ''))
+                    if num > 5:
+                        return num
+        except:
+            pass
+        return 0
+        
+    def extract_tenders(self, section_name):
+        """Extract tenders from current page"""
         tenders = []
         try:
             rows = self.driver.find_elements(By.CSS_SELECTOR, "table tbody tr")
@@ -101,159 +138,165 @@ class PPRATenderScraper:
             for row in rows:
                 try:
                     cells = row.find_elements(By.TAG_NAME, "td")
-                    if not cells or len(cells) < 4:
+                    if not cells or len(cells) < 2:
                         continue
                     
-                    # Get raw values
-                    tender_no_raw = cells[1].text.strip() if len(cells) > 1 else ''
-                    details_raw = cells[2].text.strip() if len(cells) > 2 else ''
+                    # Extract data based on number of columns
+                    tender = {'Section': section_name}
                     
-                    # Parse tender number (remove "View Invoice")
-                    tender_no = tender_no_raw.replace('View Invoice', '').strip()
-                    
-                    # Parse details: "Organization,Location | Title | Description"
-                    details_parts = details_raw.split('\n')
-                    organization = ''
-                    title = ''
-                    description = ''
-                    
-                    if len(details_parts) >= 1:
-                        org_part = details_parts[0]
-                        if ',' in org_part:
-                            org_split = org_part.rsplit(',', 1)
-                            organization = org_split[0].strip()
+                    for i, cell in enumerate(cells):
+                        text = cell.text.strip().replace('\n', ' | ')
+                        if i == 0:
+                            tender['SR_No'] = text
+                        elif i == 1:
+                            # Parse tender number
+                            tender['Tender_No'] = text.replace('View Invoice', '').strip()
+                        elif i == 2:
+                            # Parse details - Organization | Title | Description
+                            parts = text.split(' | ')
+                            if len(parts) >= 1:
+                                tender['Organization'] = parts[0].strip()
+                            if len(parts) >= 2:
+                                tender['Title'] = parts[1].strip()
+                            if len(parts) >= 3:
+                                tender['Description'] = ' '.join(parts[2:]).strip()
+                            else:
+                                tender['Description'] = parts[-1].strip() if parts else ''
+                        elif i == 3:
+                            tender['Downloads'] = text
+                        elif i == 4:
+                            tender['Advertisement_Date'] = text
+                        elif i == 5:
+                            tender['Closing_Date'] = text
                         else:
-                            organization = org_part.strip()
+                            tender[f'Column_{i+1}'] = text
                             
-                    if len(details_parts) >= 2:
-                        title = details_parts[1].strip()
-                        
-                    if len(details_parts) >= 3:
-                        description = ' '.join(details_parts[2:]).strip()
-                    else:
-                        description = title  # Use title as description if no separate desc
-                        
-                    tender = {
-                        'SR_No': cells[0].text.strip() if len(cells) > 0 else '',
-                        'Tender_No': tender_no,
-                        'Organization': organization,
-                        'Title': title,
-                        'Description': description,
-                        'Downloads': cells[3].text.strip() if len(cells) > 3 else '',
-                        'Advertisement_Date': cells[4].text.strip() if len(cells) > 4 else '',
-                        'Closing_Date': cells[5].text.strip() if len(cells) > 5 else '',
-                    }
-                    
-                    # Get download links
-                    try:
-                        links = row.find_elements(By.TAG_NAME, "a")
-                        for link in links:
-                            href = link.get_attribute('href')
-                            if href and 'javascript' not in href:
-                                tender['Download_URL'] = href
-                                break
-                    except:
-                        pass
-                        
-                    if tender['SR_No']:
+                    if tender.get('SR_No') or tender.get('Tender_No'):
+                        tender['Scrape_Date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         tenders.append(tender)
                         
                 except Exception as e:
                     continue
                     
         except Exception as e:
-            print(f"Error extracting: {e}")
+            pass
             
         return tenders
         
     def go_next_page(self):
-        """Go to next page"""
+        """Navigate to next page"""
         try:
             next_links = self.driver.find_elements(By.CSS_SELECTOR, ".pagination .page-link")
             for link in next_links:
                 if 'Next' in link.text:
-                    # Check if disabled
                     parent = link.find_element(By.XPATH, "./..")
                     if 'disabled' in (parent.get_attribute('class') or ''):
                         return False
                     self.driver.execute_script("arguments[0].click();", link)
                     time.sleep(3)
-                    return self.wait_for_data(15)
+                    return self.wait_for_data(10)
         except:
             pass
         return False
         
-    def scrape(self, max_records=MAX_RECORDS):
-        """Main scrape method"""
-        print("\n" + "="*60)
-        print("PPRA PAKISTAN TENDER SCRAPER")
-        print("="*60)
-        print(f"URL: {BASE_URL}")
-        print(f"MAX_RECORDS: {max_records if max_records else 'ALL'}")
-        print("="*60)
+    def scrape_section(self, name, url, max_records=MAX_PER_SECTION):
+        """Scrape a single section"""
+        section_tenders = []
         
-        self.setup_driver()
+        print(f"\n{'='*50}")
+        print(f"📂 {name}")
+        print(f"   {url}")
+        print('='*50)
         
         try:
-            # Navigate to page
-            print(f"\nLoading {BASE_URL}...")
-            self.driver.get(BASE_URL)
-            time.sleep(8)
+            self.driver.get(url)
+            time.sleep(5)
             
-            if not self.wait_for_data(40):
-                print("✗ Failed to load data")
+            if not self.wait_for_data(15):
+                print("   ⚠ No data found in this section")
                 return []
                 
-            print("✓ Page loaded successfully")
+            # Get page count and estimate
+            pages = self.get_page_count()
+            total_estimate = self.get_total_from_page()
             
-            # Get pagination info
-            total_pages = self.get_total_pages()
-            print(f"\n📊 Total pages found: {total_pages}")
-            print(f"📊 Estimated total records: ~{total_pages * 10}")
-            self.total_records = total_pages * 10
+            rows_first_page = len(self.driver.find_elements(By.CSS_SELECTOR, "table tbody tr"))
+            if total_estimate == 0:
+                total_estimate = pages * rows_first_page
+                
+            print(f"   📊 Pages: {pages}")
+            print(f"   📊 Estimated records: ~{total_estimate}")
+            self.section_counts[name] = total_estimate
+            self.total_available += total_estimate
             
             # Scrape pages
             page = 1
             scraped = 0
             
             while True:
-                print(f"\n--- Page {page} ---")
+                print(f"   Page {page}...", end=" ")
                 
-                page_tenders = self.extract_tenders()
-                print(f"Found {len(page_tenders)} tenders")
+                tenders = self.extract_tenders(name)
+                print(f"found {len(tenders)} tenders")
                 
-                for tender in page_tenders:
+                for tender in tenders:
                     if max_records and scraped >= max_records:
-                        print(f"\n✓ Reached MAX_RECORDS: {max_records}")
                         break
-                        
-                    tender['Page'] = page
-                    tender['Scrape_Date'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    self.tenders.append(tender)
+                    section_tenders.append(tender)
                     scraped += 1
-                    print(f"  [{scraped}] {tender['Tender_No'][:30]}...")
                     
                 if max_records and scraped >= max_records:
+                    print(f"   ✓ Reached section limit: {max_records}")
                     break
                     
-                # Try next page
-                if page >= total_pages:
-                    print("\nReached last page")
+                if page >= pages:
                     break
                     
                 if not self.go_next_page():
-                    print("\nNo more pages")
                     break
                     
                 page += 1
-                if page > 20:  # Safety limit
+                if page > 20:  # Safety limit per section
                     break
                     
-            print("\n" + "="*60)
+            print(f"   ✓ Scraped {len(section_tenders)} from {name}")
+            
+        except Exception as e:
+            print(f"   ✗ Error: {e}")
+            
+        return section_tenders
+        
+    def scrape_all(self, max_total=MAX_RECORDS):
+        """Scrape all sections"""
+        print("\n" + "="*70)
+        print("PPRA PAKISTAN - COMPREHENSIVE TENDER SCRAPER")
+        print("="*70)
+        print(f"Sections to scrape: {len(TENDER_SECTIONS)}")
+        print(f"MAX_RECORDS: {max_total if max_total else 'ALL'}")
+        print(f"MAX_PER_SECTION: {MAX_PER_SECTION}")
+        print("="*70)
+        
+        self.setup_driver()
+        
+        try:
+            total_scraped = 0
+            
+            for name, url in TENDER_SECTIONS:
+                if max_total and total_scraped >= max_total:
+                    print(f"\n✓ Reached MAX_RECORDS limit: {max_total}")
+                    break
+                    
+                # Calculate remaining allowance
+                remaining = (max_total - total_scraped) if max_total else MAX_PER_SECTION
+                section_limit = min(remaining, MAX_PER_SECTION)
+                
+                section_tenders = self.scrape_section(name, url, section_limit)
+                self.all_tenders.extend(section_tenders)
+                total_scraped += len(section_tenders)
+                
+            print("\n" + "="*70)
             print("SCRAPING COMPLETE")
-            print("="*60)
-            print(f"📊 Total available: ~{self.total_records}")
-            print(f"✓ Records scraped: {scraped}")
+            print("="*70)
             
         except Exception as e:
             print(f"\nError: {e}")
@@ -263,53 +306,66 @@ class PPRATenderScraper:
         finally:
             self.close_driver()
             
-        return self.tenders
+        return self.all_tenders
         
     def save_csv(self, filename=OUTPUT_CSV):
-        """Save to CSV"""
-        if not self.tenders:
+        """Save all tenders to CSV"""
+        if not self.all_tenders:
             print("No data to save")
             return False
             
-        df = pd.DataFrame(self.tenders)
+        df = pd.DataFrame(self.all_tenders)
+        
+        # Order columns
+        priority = ['Section', 'SR_No', 'Tender_No', 'Organization', 'Title', 
+                   'Description', 'Advertisement_Date', 'Closing_Date', 
+                   'Downloads', 'Scrape_Date']
+        cols = [c for c in priority if c in df.columns]
+        cols += [c for c in df.columns if c not in cols]
+        df = df[cols]
+        
         df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         print(f"\n✓ Saved: {filename}")
-        print(f"  Records: {len(df)}")
-        print(f"  Columns: {list(df.columns)}")
+        print(f"  Total records: {len(df)}")
+        print(f"  Columns: {len(df.columns)}")
         
         return True
+        
+    def print_summary(self):
+        """Print final summary"""
+        print("\n" + "="*70)
+        print("📊 FINAL SUMMARY - TOTAL TENDERS AVAILABLE")
+        print("="*70)
+        
+        print("\nBy Section:")
+        for section, count in self.section_counts.items():
+            print(f"  {section}: ~{count}")
+            
+        print(f"\n{'='*70}")
+        print(f"📊 TOTAL AVAILABLE ON PPRA: ~{self.total_available} tenders")
+        print(f"✓ TOTAL SCRAPED: {len(self.all_tenders)} tenders")
+        print(f"📁 OUTPUT FILE: {OUTPUT_CSV}")
+        print(f"{'='*70}")
 
 
 def main():
-    """Main function"""
-    scraper = PPRATenderScraper(headless=True)
-    tenders = scraper.scrape(max_records=MAX_RECORDS)
+    scraper = PPRAComprehensiveScraper(headless=True)
+    tenders = scraper.scrape_all(max_total=MAX_RECORDS)
     
     if tenders:
         scraper.save_csv(OUTPUT_CSV)
+        scraper.print_summary()
+    else:
+        print("\nNo tenders scraped")
         
-        print("\n" + "="*60)
-        print("SUMMARY")
-        print("="*60)
-        print(f"📊 TOTAL AVAILABLE: ~{scraper.total_records} records")
-        print(f"✓ SCRAPED: {len(tenders)} records") 
-        print(f"📁 OUTPUT: {OUTPUT_CSV}")
-        print("="*60)
-        
-        print("\nSample data:")
-        for i, t in enumerate(tenders[:3], 1):
-            print(f"\n{i}. {t.get('Tender_No', 'N/A')}")
-            details = t.get('Tender_Details', '')[:80]
-            print(f"   {details}...")
-            print(f"   Closing: {t.get('Closing_Date', 'N/A')}")
-            
-    return scraper.total_records, len(tenders) if tenders else 0
+    return scraper.total_available, len(tenders) if tenders else 0
 
 
 if __name__ == "__main__":
     total, scraped = main()
-    print(f"\n{'='*60}")
-    print(f"RESULT: Scraped {scraped} records (Total available: ~{total})")
-    print(f"MAX_RECORDS variable is set to: {MAX_RECORDS}")
-    print(f"{'='*60}")
+    print(f"\n{'='*70}")
+    print(f"RESULT: Scraped {scraped} tenders")
+    print(f"TOTAL AVAILABLE ON PPRA: ~{total} tenders")
+    print(f"MAX_RECORDS is set to: {MAX_RECORDS}")
+    print(f"{'='*70}")
