@@ -349,17 +349,19 @@ def save_to_csv(tenders, filename=OUTPUT_CSV):
         'Country',
         'Deadline',
         'Notice_Type',
-        'Summary',
         'Financier',
         'Purchaser_Ownership',
         'Tender_Value',
-        'Document_Ref_No',
-        'Purchaser_Name',
-        'Purchaser_Address',
         'Description',
         'Detail_URL',
         'Detail_Scraped'
     ]
+    
+    # Columns to exclude from output
+    columns_to_remove = ['Document_Ref_No', 'Purchaser_Name', 'Purchaser_Address', 'Summary']
+    for col in columns_to_remove:
+        if col in df.columns:
+            df = df.drop(columns=[col])
     
     # Get all columns and order them
     all_columns = list(df.columns)
