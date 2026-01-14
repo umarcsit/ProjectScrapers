@@ -179,16 +179,8 @@ def scrape_listing_page(page_url):
                 org_name_span = org_div.find('span', property='name')
                 tender['organization_name'] = clean_text(org_name_span.get_text()) if org_name_span else ''
                 
-                # Organization logo
-                logo_img = org_div.find('img', property='logo')
-                if logo_img:
-                    logo_src = logo_img.get('src', '')
-                    tender['logo_url'] = urljoin(BASE_URL, logo_src) if logo_src else ''
-                else:
-                    tender['logo_url'] = ''
             else:
                 tender['organization_name'] = ''
-                tender['logo_url'] = ''
             
             # Extract organization link (separate location)
             org_link = item.select_one('div.col-md-12 b span[type="PropertyValue"] a')
@@ -342,7 +334,6 @@ def save_to_csv(tenders, output_file):
         'short_description',
         'description',
         'attached_files',
-        'logo_url',
         'employment_type'
     ]
     
