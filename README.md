@@ -118,3 +118,23 @@ The scraper generates a comprehensive CSV with the following columns:
   1. Detail page description
   2. Tender notice PDF text
   3. Bidding document PDF text
+
+### Website Structure (from analysis)
+
+The website uses ASP.NET with Telerik RadGrid. Key identifiers:
+- **Table ID**: `ctl00_ContentPlaceHolderSRIS_rdgrdManageTender_ctl00`
+- **Table Class**: `rgMasterTable`
+- **Row Classes**: `rgRow`, `rgAltRow`
+- **Pagination**: Uses `__doPostBack` for page navigation
+- **Record Info**: Shows "X items in Y pages" format
+
+### Troubleshooting
+
+**Website not accessible?**
+The website `eproc.punjab.gov.pk` may block requests from cloud/datacenter IPs. If you get connection timeouts:
+1. Run the scraper from a local machine or VPN
+2. Try accessing the website manually first to confirm it's working
+3. Check if you're behind a firewall that blocks Pakistani government websites
+
+**Sample data in CSV:**
+The included CSV contains sample data extracted from Wayback Machine archives (July 2023). Run the scraper locally for current data.

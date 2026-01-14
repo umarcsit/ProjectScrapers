@@ -4,7 +4,18 @@ Scraper for Punjab eProcurement Portal - Active Tenders
 Source: https://eproc.punjab.gov.pk/ActiveTenders.aspx
 
 This scraper extracts tender information from the main listing page,
-visits detail pages for each tender, and extracts PDF content where available.
+visits detail pages for each tender (where available), and extracts PDF content.
+
+Columns on the website:
+- Procurement Title (type: Tender Notice, Request for Proposal, etc.)
+- Procurement Name (with optional "View Tender Detail" link)
+- Type (Goods, Services, Work)
+- Publish Date
+- Close Date
+- Department
+- Status
+- Tender Notice (PDF link)
+- Bidding Document (PDF link)
 """
 
 import os
@@ -56,6 +67,10 @@ HEADERS = {
     'Upgrade-Insecure-Requests': '1',
 }
 
+# Table and pagination identifiers (from website analysis)
+TABLE_ID = 'ctl00_ContentPlaceHolderSRIS_rdgrdManageTender_ctl00'
+PAGINATION_TARGET = 'ctl00$ContentPlaceHolderSRIS$rdgrdManageTender$ctl00$ctl03$ctl01$ctl'
+
 
 class EProcPunjabScraper:
     """Scraper for Punjab eProcurement Portal Active Tenders."""
@@ -72,6 +87,7 @@ class EProcPunjabScraper:
         self.session.verify = False  # Handle SSL certificate issues
         self.max_records = max_records
         self.total_records_available = 0
+        self.total_pages = 0
         self.scraped_records = 0
         self.tenders = []
         
@@ -116,14 +132,10 @@ class EProcPunjabScraper:
         viewstate = soup.find('input', {'id': '__VIEWSTATE'})
         viewstategenerator = soup.find('input', {'id': '__VIEWSTATEGENERATOR'})
         eventvalidation = soup.find('input', {'id': '__EVENTVALIDATION'})
-        eventtarget = soup.find('input', {'id': '__EVENTTARGET'})
-        eventargument = soup.find('input', {'id': '__EVENTARGUMENT'})
         
         self.viewstate = viewstate.get('value', '') if viewstate else ''
         self.viewstategenerator = viewstategenerator.get('value', '') if viewstategenerator else ''
         self.eventvalidation = eventvalidation.get('value', '') if eventvalidation else ''
-        self.eventtarget = eventtarget.get('value', '') if eventtarget else ''
-        self.eventargument = eventargument.get('value', '') if eventargument else ''
         
     def _extract_pdf_text(self, pdf_url):
         """
@@ -143,6 +155,7 @@ class EProcPunjabScraper:
             try:
                 import pdfplumber
                 
+                logger.debug(f"Downloading PDF: {pdf_url}")
                 response = self._make_request(pdf_url)
                 if not response:
                     return ""
@@ -186,7 +199,7 @@ class EProcPunjabScraper:
         Extract additional information from tender detail page.
         
         Args:
-            detail_url: URL of the tender detail page
+            detail_url: URL of the tender detail page (ActiveTendersDetail.aspx?id=xxx)
             
         Returns:
             Dictionary with extracted details
@@ -216,6 +229,7 @@ class EProcPunjabScraper:
             return details
             
         try:
+            logger.info(f"Fetching detail page: {detail_url}")
             response = self._make_request(detail_url)
             if not response:
                 return details
@@ -230,7 +244,49 @@ class EProcPunjabScraper:
             if main_content:
                 details['detail_raw_content'] = main_content.get_text(separator='\n', strip=True)
             
-            # Try to extract specific fields from tables
+            # Extract from labeled spans (common in ASP.NET)
+            for span in soup.find_all('span', id=True):
+                span_id = span.get('id', '').lower()
+                text = span.get_text(strip=True)
+                if not text:
+                    continue
+                    
+                if 'description' in span_id:
+                    details['detail_description'] = text
+                elif 'organization' in span_id or 'department' in span_id or 'agency' in span_id:
+                    details['detail_organization'] = text
+                elif 'type' in span_id and 'tender' in span_id:
+                    details['detail_tender_type'] = text
+                elif 'category' in span_id:
+                    details['detail_category'] = text
+                elif 'cost' in span_id or 'value' in span_id or 'amount' in span_id:
+                    details['detail_estimated_cost'] = text
+                elif 'earnest' in span_id or 'security' in span_id:
+                    details['detail_earnest_money'] = text
+                elif 'fee' in span_id:
+                    details['detail_tender_fee'] = text
+                elif 'deadline' in span_id or 'closing' in span_id or 'submission' in span_id:
+                    details['detail_submission_deadline'] = text
+                elif 'opening' in span_id:
+                    details['detail_opening_date'] = text
+                elif 'validity' in span_id:
+                    details['detail_validity_period'] = text
+                elif 'contact' in span_id and 'person' in span_id:
+                    details['detail_contact_person'] = text
+                elif 'email' in span_id:
+                    details['detail_contact_email'] = text
+                elif 'phone' in span_id or 'mobile' in span_id or 'tel' in span_id:
+                    details['detail_contact_phone'] = text
+                elif 'address' in span_id:
+                    details['detail_address'] = text
+                elif 'instruction' in span_id or 'remark' in span_id:
+                    details['detail_special_instructions'] = text
+                elif 'eligibility' in span_id or 'qualification' in span_id:
+                    details['detail_eligibility_criteria'] = text
+                elif 'specification' in span_id:
+                    details['detail_technical_specifications'] = text
+            
+            # Try to extract from tables
             tables = soup.find_all('table')
             for table in tables:
                 rows = table.find_all('tr')
@@ -240,57 +296,33 @@ class EProcPunjabScraper:
                         label = cells[0].get_text(strip=True).lower()
                         value = cells[1].get_text(strip=True)
                         
-                        # Map common labels to our fields
-                        label_mappings = {
-                            'description': 'detail_description',
-                            'tender description': 'detail_description',
-                            'organization': 'detail_organization',
-                            'department': 'detail_organization',
-                            'procuring agency': 'detail_organization',
-                            'tender type': 'detail_tender_type',
-                            'procurement type': 'detail_tender_type',
-                            'category': 'detail_category',
-                            'estimated cost': 'detail_estimated_cost',
-                            'estimated value': 'detail_estimated_cost',
-                            'earnest money': 'detail_earnest_money',
-                            'bid security': 'detail_earnest_money',
-                            'tender fee': 'detail_tender_fee',
-                            'document fee': 'detail_tender_fee',
-                            'submission deadline': 'detail_submission_deadline',
-                            'closing date': 'detail_submission_deadline',
-                            'last date': 'detail_submission_deadline',
-                            'opening date': 'detail_opening_date',
-                            'bid opening': 'detail_opening_date',
-                            'validity': 'detail_validity_period',
-                            'valid till': 'detail_validity_period',
-                            'contact person': 'detail_contact_person',
-                            'contact name': 'detail_contact_person',
-                            'email': 'detail_contact_email',
-                            'phone': 'detail_contact_phone',
-                            'telephone': 'detail_contact_phone',
-                            'mobile': 'detail_contact_phone',
-                            'address': 'detail_address',
-                            'special instructions': 'detail_special_instructions',
-                            'remarks': 'detail_special_instructions',
-                            'eligibility': 'detail_eligibility_criteria',
-                            'eligibility criteria': 'detail_eligibility_criteria',
-                            'pre-qualification': 'detail_eligibility_criteria',
-                            'specifications': 'detail_technical_specifications',
-                            'technical specifications': 'detail_technical_specifications',
-                        }
-                        
-                        for key, field in label_mappings.items():
-                            if key in label:
-                                details[field] = value
-                                break
-            
-            # Extract description from common containers
-            desc_containers = soup.find_all(['div', 'p', 'span'], 
-                                           class_=re.compile(r'description|content|detail', re.I))
-            for container in desc_containers:
-                text = container.get_text(strip=True)
-                if len(text) > len(details['detail_description']):
-                    details['detail_description'] = text
+                        # Map common labels
+                        if 'description' in label and not details['detail_description']:
+                            details['detail_description'] = value
+                        elif ('organization' in label or 'department' in label) and not details['detail_organization']:
+                            details['detail_organization'] = value
+                        elif 'type' in label and not details['detail_tender_type']:
+                            details['detail_tender_type'] = value
+                        elif 'estimated' in label or 'cost' in label:
+                            details['detail_estimated_cost'] = value
+                        elif 'earnest' in label or 'bid security' in label:
+                            details['detail_earnest_money'] = value
+                        elif 'fee' in label:
+                            details['detail_tender_fee'] = value
+                        elif 'deadline' in label or 'closing' in label or 'last date' in label:
+                            details['detail_submission_deadline'] = value
+                        elif 'opening' in label:
+                            details['detail_opening_date'] = value
+                        elif 'validity' in label:
+                            details['detail_validity_period'] = value
+                        elif 'contact' in label:
+                            details['detail_contact_person'] = value
+                        elif 'email' in label:
+                            details['detail_contact_email'] = value
+                        elif 'phone' in label or 'mobile' in label:
+                            details['detail_contact_phone'] = value
+                        elif 'address' in label:
+                            details['detail_address'] = value
                     
         except Exception as e:
             logger.warning(f"Failed to extract detail page {detail_url}: {e}")
@@ -301,6 +333,17 @@ class EProcPunjabScraper:
         """
         Parse a single tender row from the main table.
         
+        Expected columns:
+        0: Procurement Title (type of notice)
+        1: Procurement Name (may contain View Tender Detail link)
+        2: Type (Goods/Services/Work)
+        3: Publish Date
+        4: Close Date
+        5: Department
+        6: Status
+        7: Tender Notice (PDF link)
+        8: Bidding Document (PDF link)
+        
         Args:
             row: BeautifulSoup table row element
             row_index: Index of the row
@@ -309,107 +352,73 @@ class EProcPunjabScraper:
             Dictionary with tender data or None if parsing failed
         """
         cells = row.find_all('td')
-        if not cells or len(cells) < 3:
+        if not cells or len(cells) < 9:
             return None
             
         tender = {
-            'sr_no': '',
-            'procurement_name': '',
-            'procurement_name_link': '',
-            'tender_notice': '',
-            'tender_notice_pdf_link': '',
-            'bidding_document': '',
-            'bidding_document_pdf_link': '',
-            'organization': '',
-            'tender_ref_no': '',
-            'published_date': '',
-            'closing_date': '',
-            'opening_date': '',
-            'tender_value': '',
-            'tender_status': '',
+            'sr_no': row_index + 1,
+            'procurement_title': '',  # Type of notice (Tender Notice, RFP, etc.)
+            'procurement_name': '',   # Actual tender name/description
+            'detail_page_link': '',   # View Tender Detail link if available
+            'type': '',               # Goods/Services/Work
+            'publish_date': '',
+            'close_date': '',
+            'department': '',
+            'status': '',
+            'tender_notice_link': '',
+            'bidding_document_link': '',
             'description': '',
             'tender_notice_pdf_text': '',
             'bidding_document_pdf_text': '',
         }
         
         try:
-            # Extract data based on common column structures
-            # Column indices may vary - try to detect by content
+            # Column 0: Procurement Title (type of notice)
+            tender['procurement_title'] = cells[0].get_text(strip=True)
             
-            for idx, cell in enumerate(cells):
-                cell_text = cell.get_text(strip=True)
+            # Column 1: Procurement Name (may contain View Tender Detail link)
+            cell_1 = cells[1]
+            tender['procurement_name'] = cell_1.get_text(strip=True)
+            
+            # Check for "View Tender Detail" link
+            detail_link = cell_1.find('a', href=re.compile(r'ActiveTendersDetail\.aspx', re.I))
+            if detail_link:
+                href = detail_link.get('href', '')
+                tender['detail_page_link'] = urljoin(BASE_URL, href)
+                # Remove link text from procurement name
+                link_text = detail_link.get_text(strip=True)
+                tender['procurement_name'] = tender['procurement_name'].replace(link_text, '').strip()
+                tender['procurement_name'] = re.sub(r'\s*\(\s*\)\s*$', '', tender['procurement_name'])
+            
+            # Column 2: Type
+            tender['type'] = cells[2].get_text(strip=True)
+            
+            # Column 3: Publish Date
+            tender['publish_date'] = cells[3].get_text(strip=True)
+            
+            # Column 4: Close Date
+            tender['close_date'] = cells[4].get_text(strip=True)
+            
+            # Column 5: Department
+            tender['department'] = cells[5].get_text(strip=True)
+            
+            # Column 6: Status
+            tender['status'] = cells[6].get_text(strip=True)
+            
+            # Column 7: Tender Notice PDF
+            cell_7 = cells[7]
+            pdf_link = cell_7.find('a', href=re.compile(r'\.pdf', re.I))
+            if pdf_link:
+                href = pdf_link.get('href', '')
+                tender['tender_notice_link'] = urljoin(BASE_URL, href)
+            
+            # Column 8: Bidding Document PDF
+            cell_8 = cells[8]
+            pdf_link = cell_8.find('a', href=re.compile(r'\.pdf', re.I))
+            if pdf_link:
+                href = pdf_link.get('href', '')
+                tender['bidding_document_link'] = urljoin(BASE_URL, href)
                 
-                # Check for serial number (usually first column, numeric)
-                if idx == 0 and cell_text.isdigit():
-                    tender['sr_no'] = cell_text
-                    continue
-                    
-                # Check for links in the cell
-                links = cell.find_all('a')
-                
-                for link in links:
-                    href = link.get('href', '')
-                    link_text = link.get_text(strip=True)
-                    
-                    # Full URL
-                    full_url = urljoin(BASE_URL, href) if href else ''
-                    
-                    # Detect link type by text or href
-                    link_text_lower = link_text.lower()
-                    href_lower = href.lower()
-                    
-                    if 'view' in link_text_lower or 'detail' in link_text_lower:
-                        tender['procurement_name_link'] = full_url
-                        tender['procurement_name'] = cell_text.replace(link_text, '').strip() or link_text
-                    elif href_lower.endswith('.pdf') or 'pdf' in link_text_lower:
-                        if 'notice' in link_text_lower or 'notice' in cell_text.lower():
-                            tender['tender_notice_pdf_link'] = full_url
-                            tender['tender_notice'] = link_text
-                        elif 'document' in link_text_lower or 'bidding' in cell_text.lower():
-                            tender['bidding_document_pdf_link'] = full_url
-                            tender['bidding_document'] = link_text
-                        elif not tender['tender_notice_pdf_link']:
-                            tender['tender_notice_pdf_link'] = full_url
-                            tender['tender_notice'] = link_text
-                        else:
-                            tender['bidding_document_pdf_link'] = full_url
-                            tender['bidding_document'] = link_text
-                
-                # If no links found, try to detect column by position or content
-                if not links:
-                    cell_text_lower = cell_text.lower()
-                    
-                    # Try to identify columns by content patterns
-                    if re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', cell_text):
-                        # Date pattern
-                        if not tender['published_date']:
-                            tender['published_date'] = cell_text
-                        elif not tender['closing_date']:
-                            tender['closing_date'] = cell_text
-                        elif not tender['opening_date']:
-                            tender['opening_date'] = cell_text
-                    elif re.match(r'[A-Z]{2,}[-/]\d+', cell_text, re.I):
-                        # Reference number pattern
-                        tender['tender_ref_no'] = cell_text
-                    elif 'rs' in cell_text_lower or re.match(r'[\d,]+\.?\d*', cell_text):
-                        # Monetary value
-                        if not tender['tender_value']:
-                            tender['tender_value'] = cell_text
-                    elif not tender['organization'] and len(cell_text) > 5:
-                        tender['organization'] = cell_text
-                        
-            # If procurement name is still empty, use first non-empty cell after sr_no
-            if not tender['procurement_name']:
-                for idx, cell in enumerate(cells[1:], 1):
-                    text = cell.get_text(strip=True)
-                    if text and len(text) > 3:
-                        tender['procurement_name'] = text
-                        # Check for link
-                        link = cell.find('a')
-                        if link:
-                            tender['procurement_name_link'] = urljoin(BASE_URL, link.get('href', ''))
-                        break
-                        
         except Exception as e:
             logger.warning(f"Error parsing row {row_index}: {e}")
             return None
@@ -418,88 +427,84 @@ class EProcPunjabScraper:
     
     def _get_total_records(self, soup):
         """
-        Extract total number of records from the page.
+        Extract total number of records and pages from the page.
+        
+        Looks for pattern like "638 items in 7 pages"
         
         Args:
             soup: BeautifulSoup object of the page
             
         Returns:
-            Total record count or 0 if not found
+            Tuple of (total_items, total_pages)
         """
-        # Look for common patterns like "Showing 1-20 of 150 records"
         text = soup.get_text()
         
-        patterns = [
-            r'of\s+(\d+)\s+records?',
-            r'total\s*:?\s*(\d+)',
-            r'(\d+)\s+tenders?\s+found',
-            r'showing\s+\d+\s*-\s*\d+\s+of\s+(\d+)',
-            r'page\s+\d+\s+of\s+\d+\s*\((\d+)\s+records?\)',
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, text, re.I)
-            if match:
-                return int(match.group(1))
-                
-        # Count rows in the main table as fallback
-        table = soup.find('table', {'id': re.compile(r'grid|tender|list', re.I)})
-        if table:
-            rows = table.find_all('tr')
-            # Subtract header row
-            return max(0, len(rows) - 1)
+        # Pattern: "638 items in 7 pages"
+        match = re.search(r'(\d+)\s*items?\s+in\s+(\d+)\s*pages?', text, re.I)
+        if match:
+            return int(match.group(1)), int(match.group(2))
             
-        return 0
+        # Alternative patterns
+        items_match = re.search(r'total\s*:?\s*(\d+)', text, re.I)
+        pages_match = re.search(r'page\s+\d+\s+of\s+(\d+)', text, re.I)
+        
+        items = int(items_match.group(1)) if items_match else 0
+        pages = int(pages_match.group(1)) if pages_match else 1
+        
+        return items, pages
     
-    def _get_next_page_data(self, soup, current_page):
+    def _get_pagination_data(self, soup, page_number):
         """
-        Prepare POST data for next page request (ASP.NET pagination).
+        Prepare POST data for pagination request.
+        
+        The site uses ASP.NET with Telerik RadGrid pagination.
         
         Args:
             soup: BeautifulSoup object of current page
-            current_page: Current page number
+            page_number: Target page number (1-indexed)
             
         Returns:
-            POST data dictionary or None if no more pages
+            POST data dictionary or None if pagination not possible
         """
-        # Look for pagination controls
-        pager = soup.find('tr', {'class': re.compile(r'pager|pagination', re.I)})
-        if not pager:
-            pager = soup.find('div', {'class': re.compile(r'pager|pagination', re.I)})
-            
+        # Find pagination div
+        pager = soup.find('div', class_='rgWrap rgNumPart')
         if not pager:
             return None
             
-        # Find next page link
-        next_link = pager.find('a', text=re.compile(r'next|>|»|\d+', re.I))
-        if not next_link:
-            # Try finding link with page number greater than current
-            links = pager.find_all('a')
-            for link in links:
-                try:
-                    page_num = int(link.get_text(strip=True))
-                    if page_num > current_page:
-                        next_link = link
-                        break
-                except ValueError:
-                    continue
-                    
-        if not next_link:
-            return None
-            
-        # Extract ASP.NET postback parameters
-        href = next_link.get('href', '')
+        # Find the link for the target page
+        page_links = pager.find_all('a')
+        target_link = None
         
-        # Parse __doPostBack('ctl00$ContentPlaceHolder1$gvTenders','Page$2')
+        for link in page_links:
+            try:
+                link_page = int(link.get_text(strip=True))
+                if link_page == page_number:
+                    target_link = link
+                    break
+            except ValueError:
+                continue
+        
+        if not target_link:
+            # Try "..." or next page buttons
+            for link in page_links:
+                href = link.get('href', '')
+                if f"Page${page_number}" in href:
+                    target_link = link
+                    break
+                    
+        if not target_link:
+            return None
+            
+        # Extract __doPostBack parameters
+        href = target_link.get('href', '')
         postback_match = re.search(r"__doPostBack\('([^']+)',\s*'([^']+)'\)", href)
         
-        if postback_match:
-            event_target = postback_match.group(1)
-            event_argument = postback_match.group(2)
-        else:
-            event_target = next_link.get('name', '')
-            event_argument = ''
+        if not postback_match:
+            return None
             
+        event_target = postback_match.group(1)
+        event_argument = postback_match.group(2)
+        
         # Build POST data
         post_data = {
             '__EVENTTARGET': event_target,
@@ -513,7 +518,7 @@ class EProcPunjabScraper:
     
     def scrape_main_page(self):
         """
-        Scrape the main active tenders listing page.
+        Scrape the main active tenders listing page with pagination.
         
         Returns:
             List of tender dictionaries
@@ -529,31 +534,29 @@ class EProcPunjabScraper:
         soup = BeautifulSoup(response.content, 'lxml')
         self._extract_asp_state(soup)
         
-        # Get total records
-        self.total_records_available = self._get_total_records(soup)
+        # Get total records and pages
+        self.total_records_available, self.total_pages = self._get_total_records(soup)
         logger.info(f"Total records available: {self.total_records_available}")
+        logger.info(f"Total pages: {self.total_pages}")
         
         current_page = 1
         all_tenders = []
         
         while True:
-            logger.info(f"Processing page {current_page}")
+            logger.info(f"Processing page {current_page}/{self.total_pages}")
             
             # Find the main tender table
-            table = soup.find('table', {'id': re.compile(r'grid|tender|list', re.I)})
+            table = soup.find('table', {'id': TABLE_ID})
             if not table:
-                # Try finding by class or just the largest table
-                tables = soup.find_all('table')
-                if tables:
-                    table = max(tables, key=lambda t: len(t.find_all('tr')))
-                    
+                # Fallback: find table with rgMasterTable class
+                table = soup.find('table', class_='rgMasterTable')
+                
             if not table:
                 logger.warning(f"No tender table found on page {current_page}")
                 break
                 
-            # Get all data rows (skip header)
-            rows = table.find_all('tr')
-            data_rows = [r for r in rows if r.find('td')]
+            # Get all data rows (skip header, look for rgRow and rgAltRow classes)
+            data_rows = table.find_all('tr', class_=['rgRow', 'rgAltRow'])
             
             logger.info(f"Found {len(data_rows)} tender rows on page {current_page}")
             
@@ -562,7 +565,7 @@ class EProcPunjabScraper:
                     logger.info(f"Reached max records limit: {self.max_records}")
                     break
                     
-                tender = self._parse_tender_row(row, idx)
+                tender = self._parse_tender_row(row, len(all_tenders))
                 if tender:
                     all_tenders.append(tender)
                     self.scraped_records += 1
@@ -571,22 +574,29 @@ class EProcPunjabScraper:
             if self.max_records and len(all_tenders) >= self.max_records:
                 break
                 
+            # Check if there are more pages
+            if current_page >= self.total_pages:
+                logger.info("Reached last page")
+                break
+                
             # Try to get next page
-            next_page_data = self._get_next_page_data(soup, current_page)
+            next_page = current_page + 1
+            next_page_data = self._get_pagination_data(soup, next_page)
+            
             if not next_page_data:
-                logger.info("No more pages to process")
+                logger.info("No more pages available")
                 break
                 
             # Fetch next page
             time.sleep(DELAY_BETWEEN_REQUESTS)
             response = self._make_request(ACTIVE_TENDERS_URL, method='POST', data=next_page_data)
             if not response:
-                logger.error(f"Failed to fetch page {current_page + 1}")
+                logger.error(f"Failed to fetch page {next_page}")
                 break
                 
             soup = BeautifulSoup(response.content, 'lxml')
             self._extract_asp_state(soup)
-            current_page += 1
+            current_page = next_page
             
         return all_tenders
     
@@ -605,26 +615,26 @@ class EProcPunjabScraper:
         for idx, tender in enumerate(tenders):
             logger.info(f"Enriching tender {idx + 1}/{total}: {tender.get('procurement_name', 'Unknown')[:50]}...")
             
-            # Visit detail page
-            if tender.get('procurement_name_link'):
+            # Visit detail page if available
+            if tender.get('detail_page_link'):
                 logger.info(f"  Fetching detail page...")
                 time.sleep(DELAY_BETWEEN_REQUESTS)
-                details = self._extract_detail_page(tender['procurement_name_link'])
+                details = self._extract_detail_page(tender['detail_page_link'])
                 tender.update(details)
                 
             # Extract tender notice PDF text
-            if tender.get('tender_notice_pdf_link'):
+            if tender.get('tender_notice_link'):
                 logger.info(f"  Extracting tender notice PDF...")
                 time.sleep(DELAY_BETWEEN_REQUESTS)
-                tender['tender_notice_pdf_text'] = self._extract_pdf_text(tender['tender_notice_pdf_link'])
+                tender['tender_notice_pdf_text'] = self._extract_pdf_text(tender['tender_notice_link'])
                 
             # Extract bidding document PDF text
-            if tender.get('bidding_document_pdf_link'):
+            if tender.get('bidding_document_link'):
                 logger.info(f"  Extracting bidding document PDF...")
                 time.sleep(DELAY_BETWEEN_REQUESTS)
-                tender['bidding_document_pdf_text'] = self._extract_pdf_text(tender['bidding_document_pdf_link'])
+                tender['bidding_document_pdf_text'] = self._extract_pdf_text(tender['bidding_document_link'])
                 
-            # Compile final description
+            # Compile final description from all sources
             description_parts = []
             
             if tender.get('detail_description'):
@@ -657,20 +667,19 @@ class EProcPunjabScraper:
             
         # Define column order for better readability
         column_order = [
+            # Main listing columns
             'sr_no',
+            'procurement_title',
             'procurement_name',
-            'procurement_name_link',
-            'organization',
-            'tender_ref_no',
-            'tender_notice',
-            'tender_notice_pdf_link',
-            'bidding_document',
-            'bidding_document_pdf_link',
-            'published_date',
-            'closing_date',
-            'opening_date',
-            'tender_value',
-            'tender_status',
+            'type',
+            'publish_date',
+            'close_date',
+            'department',
+            'status',
+            'tender_notice_link',
+            'bidding_document_link',
+            'detail_page_link',
+            # Detail page columns
             'detail_organization',
             'detail_tender_type',
             'detail_category',
@@ -687,6 +696,7 @@ class EProcPunjabScraper:
             'detail_eligibility_criteria',
             'detail_technical_specifications',
             'detail_special_instructions',
+            # Description columns (combined and raw)
             'description',
             'tender_notice_pdf_text',
             'bidding_document_pdf_text',
@@ -744,6 +754,7 @@ class EProcPunjabScraper:
         logger.info("SCRAPING SUMMARY")
         logger.info("=" * 60)
         logger.info(f"Total Records Available: {self.total_records_available}")
+        logger.info(f"Total Pages: {self.total_pages}")
         logger.info(f"Records Scraped: {len(tenders)}")
         logger.info(f"Output File: {OUTPUT_CSV}")
         logger.info("=" * 60)
@@ -767,11 +778,15 @@ def main():
         print(f"Output CSV File: {OUTPUT_CSV}")
         
         if tenders:
-            print(f"\nSample of scraped data:")
+            print(f"\nSample of scraped data (first 3 records):")
             for i, tender in enumerate(tenders[:3], 1):
-                print(f"\n{i}. {tender.get('procurement_name', 'N/A')[:60]}...")
-                print(f"   Organization: {tender.get('organization', 'N/A')[:40]}")
-                print(f"   Detail Link: {tender.get('procurement_name_link', 'N/A')[:50]}")
+                print(f"\n{i}. [{tender.get('procurement_title', 'N/A')}] {tender.get('procurement_name', 'N/A')[:60]}...")
+                print(f"   Type: {tender.get('type', 'N/A')}")
+                print(f"   Department: {tender.get('department', 'N/A')[:50]}")
+                print(f"   Published: {tender.get('publish_date', 'N/A')} | Closes: {tender.get('close_date', 'N/A')}")
+                print(f"   Tender Notice PDF: {'Yes' if tender.get('tender_notice_link') else 'No'}")
+                print(f"   Bidding Doc PDF: {'Yes' if tender.get('bidding_document_link') else 'No'}")
+                print(f"   Detail Page: {'Yes' if tender.get('detail_page_link') else 'No'}")
                 print(f"   Description Length: {len(tender.get('description', ''))}")
                 
     except KeyboardInterrupt:
